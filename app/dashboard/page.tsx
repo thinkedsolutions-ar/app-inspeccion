@@ -122,6 +122,7 @@ export default function DashboardPage() {
         <nav className="flex-1 px-2 space-y-2 mt-4">
           <button onClick={() => setActiveTab('reportes')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold transition-colors ${activeTab === 'reportes' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'text-white/70 hover:bg-white/5'}`}>📊 Reportes Generales</button>
           <button onClick={() => setActiveTab('usuarios')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold transition-colors ${activeTab === 'usuarios' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'text-white/70 hover:bg-white/5'}`}>⚙️ Usuarios</button>
+          <button onClick={() => setActiveTab('listados')} className="w-full ...">📁 Listados Maestros</button> 
         </nav>
         <div className="p-4">
           <button onClick={() => { localStorage.removeItem('buttini_user'); window.location.href = '/'; }} className="w-full bg-red-600 text-white p-3 rounded-lg font-bold hover:bg-red-700">CERRAR SESIÓN</button>
@@ -202,6 +203,21 @@ export default function DashboardPage() {
                       </tbody>
                     </table>
                  </div>
+              )}
+              {activeTab === 'listados' && (
+                <div className="bg-white p-6 rounded-xl shadow-sm border space-y-8">
+                  <h3 className="text-[#003366] font-bold text-xl">Gestión de Listados Maestros</h3>
+                  
+                  {['conductores', 'unidades', 'servicios'].map(tabla => (
+                    <div key={tabla} className="p-4 border rounded-lg flex items-center justify-between">
+                      <div>
+                        <h4 className="font-bold capitalize">{tabla}</h4>
+                        <a href={`/templates/${tabla}.csv`} download className="text-xs text-blue-600 underline">Descargar modelo CSV</a>
+                      </div>
+                      <input type="file" accept=".csv" onChange={(e) => handleUpload(e, tabla)} />
+                    </div>
+                  ))}
+                </div>
               )}
             </>
           )}

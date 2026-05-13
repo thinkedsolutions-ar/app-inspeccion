@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import SearchInput from '@/components/SearchInput';
 
 export default function InspeccionPage() {
   const [user, setUser] = useState<any>(null);
@@ -109,8 +110,11 @@ export default function InspeccionPage() {
               <td className="p-2 text-left border-t border-r border-gray-200">{item.l}</td>
               {options.map(opt => (
                 <td key={opt} className="p-2 border-t border-gray-200">
-                  <input type="radio" name={`${prefix}_${item.k}`} value={opt} className="w-4 h-4 cursor-pointer" required
-                    onChange={(e) => setFormData({...formData, [`${prefix}_${item.k}`]: e.target.value})} />
+                  <input type="radio" 
+                  name={`${prefix}_${item.k}`} 
+                  value={opt} className="w-4 h-4 cursor-pointer" required
+                  checked={formData[`${prefix}_${item.k}`] === String(opt)} 
+                  onChange={(e) => setFormData({...formData, [`${prefix}_${item.k}`]: e.target.value})} />
                 </td>
               ))}
             </tr>
@@ -150,14 +154,18 @@ export default function InspeccionPage() {
                   <div className="flex justify-center gap-2">
                     {['E', 'MB', 'B', 'R'].map(opt => (
                       <label key={opt} className="flex items-center gap-1 text-xs cursor-pointer">
-                        <input type="radio" name={`descanso_${item.k}`} value={opt} required onChange={(e) => setFormData({...formData, [`descanso_${item.k}`]: e.target.value})} />
+                        <input type="radio" 
+                        name={`descanso_${item.k}`} 
+                        value={opt} 
+                        checked={formData[`descanso_${item.k}`] === opt} 
+                        required onChange={(e) => setFormData({...formData, [`descanso_${item.k}`]: e.target.value})} />
                         {opt}
                       </label>
                     ))}
                   </div>
                 </td>
                 <td className="p-2 border-t border-gray-200">
-                  <textarea className="w-full border rounded p-1 text-xs" rows={2} onChange={(e) => setFormData({...formData,[`obs_${item.k}`]: e.target.value})}></textarea>
+                  <textarea className="w-full border rounded p-1 text-xs" rows={2} value={formData[`obs_${item.k}`] || ''} onChange={(e) => setFormData({...formData,[`obs_${item.k}`]: e.target.value})}></textarea>
                 </td>
               </tr>
             ))}
@@ -171,16 +179,37 @@ export default function InspeccionPage() {
     <div className="space-y-4 mb-6 border-b pb-6">
       <div>
         <label className="text-xs font-bold text-[#003366] flex items-center gap-1"><span className="text-blue-500">🔍</span> Conductor (Escriba 3 letras)</label>
-        <input type="text" placeholder="Buscar conductor..." className="w-full p-2 border rounded" onChange={(e) => setFormData({...formData, conductor: e.target.value})} required />
+        <SearchInput 
+          label="🔍 Conductor (Escriba 3 letras)" 
+          placeholder="Buscar conductor..."
+          table="conductores"
+          column="nombre_completo"
+          onSelect={(val) => setFormData({...formData, conductor: val})}
+          required={true}
+        />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-xs font-bold text-[#003366] flex items-center gap-1">🚌 Unidad N° (Escriba 2 letras)</label>
-          <input type="text" placeholder="Buscar unidad..." className="w-full p-2 border rounded" onChange={(e) => setFormData({...formData, unidad: e.target.value})} required />
+          <SearchInput 
+            label="🚌 Unidad N°" 
+            placeholder="Buscar unidad..."
+            table="unidades"
+            column="numero_unidad"
+            onSelect={(val) => setFormData({...formData, unidad: val})}
+            required={true}
+          />
         </div>
         <div>
           <label className="text-xs font-bold text-[#003366]">Servicio (Escriba 3 letras)</label>
-          <input type="text" placeholder="Buscar servicio..." className="w-full p-2 border rounded" onChange={(e) => setFormData({...formData, servicio: e.target.value})} required />
+            <SearchInput 
+            label="🚌 Unidad N°" 
+            placeholder="Buscar servicio..."
+            table="servicios"
+            column="descripcion"
+            onSelect={(val) => setFormData({...formData, servicio: val})}
+            required={true}
+          />
         </div>
       </div>
       {includesInstructor && (
@@ -217,7 +246,7 @@ export default function InspeccionPage() {
         <div className="grid grid-cols-2">
           <div className="p-3 border-r border-b font-bold bg-white flex items-center">Micronauta</div>
           <div className="p-3 border-b bg-gray-50">
-            <label className="block"><input type="radio" name="micron_existe" value="Existe" onChange={(e)=>setFormData({...formData, micron_existe: e.target.value})}/> Existe</label>
+            <label className="block"><input type="radio" name="micron_existe" value="Existe" checked={formData.micron_existe === 'Existe'}  onChange={(e)=>setFormData({...formData, micron_existe: e.target.value})}/> Existe</label>
             <label className="block"><input type="radio" name="micron_existe" value="No Existe" onChange={(e)=>setFormData({...formData, micron_existe: e.target.value})}/> No Existe</label>
           </div>
           <div className="p-3 border-r border-b bg-white">Func. Equipo</div>
