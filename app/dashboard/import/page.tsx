@@ -7,17 +7,14 @@ export default function ImportPage() {
   
   const handleUpload = (e: any, table: string) => {
     if (!e.target.files || e.target.files.length === 0) return;
-
-    Papa.parse(e.target.files[0], {
+    const file = e.target.files[0];
+    Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: async (results) => {
         const { error } = await supabase.from(table).insert(results.data);
-        if (error) {
-          alert("Error al cargar: " + error.message);
-        } else {
-          alert("¡Datos cargados correctamente en " + table + "!");
-        }
+        if (error) alert("Error: " + error.message);
+        else alert("¡Datos cargados correctamente!");
       }
     });
   };

@@ -214,7 +214,7 @@ export default function DashboardPage() {
                         <h4 className="font-bold capitalize">{tabla}</h4>
                         <a href={`/templates/${tabla}.csv`} download className="text-xs text-blue-600 underline">Descargar modelo CSV</a>
                       </div>
-                      <input type="file" accept=".csv" onChange={(e) => handleUpload(e, tabla)} />
+                      <input type="file" accept=".csv" onChange={(e) => console.log("Función pendiente")} />
                     </div>
                   ))}
                 </div>
