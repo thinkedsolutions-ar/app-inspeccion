@@ -95,32 +95,41 @@ export default function InspeccionPage() {
   // COMPONENTES REUTILIZABLES PARA DIBUJAR LAS TABLAS EXACTAS
   // -------------------------------------------------------------
   const RatingTable = ({ title, items, options, prefix }: { title: string, items: {k:string, l:string}[], options: string[], prefix: string }) => (
-    <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm">
-      <table className="w-full text-sm text-center bg-white border-collapse">
-        <thead className="bg-[#003366] text-white">
-          <tr><th colSpan={options.length + 1} className="p-2 font-bold uppercase">{title}</th></tr>
-          <tr className="bg-[#002244] text-xs">
-            <th className="p-2 text-left w-1/2">ITEM</th>
-            {options.map(o => <th key={o} className="p-2">{o}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item, idx) => (
-            <tr key={item.k} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-              <td className="p-2 text-left border-t border-r border-gray-200">{item.l}</td>
-              {options.map(opt => (
-                <td key={opt} className="p-2 border-t border-gray-200">
-                  <input type="radio" 
-                  name={`${prefix}_${item.k}`} 
-                  value={opt} className="w-4 h-4 cursor-pointer" required
-                  checked={formData[`${prefix}_${item.k}`] === String(opt)} 
-                  onChange={(e) => setFormData({...formData, [`${prefix}_${item.k}`]: e.target.value})} />
-                </td>
-              ))}
+    <div className="mb-8 overflow-hidden border border-[#003366] rounded-xl shadow-md bg-white">
+      <div className="bg-[#003366] text-white p-3 font-bold uppercase text-center text-sm">{title}</div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-center border-collapse">
+          <thead>
+            <tr className="bg-[#002244] text-white text-[10px]">
+              <th className="p-2 text-left w-1/2">ITEM</th>
+              {options.map(o => <th key={o} className="p-2">{o}</th>)}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((item, idx) => (
+              <tr key={`${prefix}-${item.k}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <td className="p-3 text-left border-t border-r font-medium border-gray-100">{item.l}</td>
+                {options.map(opt => (
+                  <td key={`${prefix}-${item.k}-${opt}`} className="p-2 border-t border-gray-100">
+                    <input 
+                      type="radio" 
+                      name={`${prefix}_${item.k}`} 
+                      value={opt} 
+                      className="w-5 h-5 cursor-pointer accent-[#003366]" 
+                      checked={formData[`${prefix}_${item.k}`] === String(opt)}
+                      required
+                      onChange={(e) => {
+                        // Evita que el evento se propague y cause saltos
+                        setFormData(prev => ({ ...prev, [`${prefix}_${item.k}`]: e.target.value }));
+                      }} 
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 
@@ -212,12 +221,18 @@ export default function InspeccionPage() {
           />
         </div>
       </div>
-      {includesInstructor && (
-        <div className="pt-4 border-t">
-          <label className="text-xs font-bold text-[#003366] flex items-center gap-1">👨‍🏫 Instructor / Tutor (Escriba 3 letras)</label>
-          <input type="text" placeholder="Buscar instructor..." className="w-full p-2 border rounded" onChange={(e) => setFormData({...formData, instructor: e.target.value})} required />
-        </div>
-      )}
+    {includesInstructor && (
+      <div className="pt-4 border-t mt-4">
+        <SearchInput 
+          label="👨‍🏫 Instructor / Tutor" 
+          placeholder="Buscar instructor..."
+          table="conductores" // Usa la misma tabla de conductores
+          column="nombre_completo"
+          onSelect={(val) => setFormData(prev => ({...prev, instructor: val}))}
+          required={true}
+        />
+      </div>
+    )}
     </div>
   );
 
