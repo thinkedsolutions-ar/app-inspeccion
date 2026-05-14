@@ -6,31 +6,25 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "next lint"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.105.1",
+    "@supabase/supabase-js": "^2.39.0",
     "chart.js": "^4.5.1",
-<<<<<<< HEAD
-    "next": "^16.2.6",
-    "react": "^19.2.6",
+    "next": "latest",
+    "react": "latest",
     "react-chartjs-2": "^5.3.1",
-    "react-dom": "^19.2.6"
-=======
-    "next": "^9.3.3",
-    "react": "19.2.4",
-    "react-chartjs-2": "^5.3.1",
-    "react-dom": "19.2.4"
->>>>>>> bcfe3a920d1f612d54f03b120e0476b4513182dd
+    "react-dom": "latest"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.4",
-    "tailwindcss": "^4",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "latest",
+    "postcss": "^8",
+    "tailwindcss": "^3.3.0",
     "typescript": "^5"
   }
 }
