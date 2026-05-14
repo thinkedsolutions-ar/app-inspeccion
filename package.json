@@ -11,10 +11,17 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",
     "chart.js": "^4.5.1",
+<<<<<<< HEAD
     "next": "^16.2.6",
     "react": "^19.2.6",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.6"
+=======
+    "next": "^9.3.3",
+    "react": "19.2.4",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "19.2.4"
+>>>>>>> bcfe3a920d1f612d54f03b120e0476b4513182dd
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
