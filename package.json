@@ -10,8 +10,11 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "@tailwindcss/postcss": "^4.3.0",
+    "@types/papaparse": "^5.5.2",
     "chart.js": "^4.5.1",
     "next": "latest",
+    "papaparse": "^5.5.3",
     "react": "latest",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "latest"
