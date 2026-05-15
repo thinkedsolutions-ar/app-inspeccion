@@ -33,6 +33,8 @@ export default function DashboardPage() {
   const [modalIns, setModalIns] = useState<any>(null);
   const [nuevoComentario, setNewComentario] = useState('');
   const [newUser, setNewUser] = useState({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' });
+  const [selectedInspectorChart, setSelectedInspectorChart] = useState<string | null>(null);
+  const [selectedTypeChart, setSelectedTypeChart] = useState<string | null>(null);
 
   useEffect(() => {
     const session = localStorage.getItem('buttini_user');
@@ -122,11 +124,54 @@ export default function DashboardPage() {
     if (idx >= 0) trendData[idx]++;
   });
 
-  const conteoTipos: Record<string, number> = {}; const conteoInspectores: Record<string, number> = {};
-  dataTabla.forEach(ins => { conteoTipos[ins.tipo] = (conteoTipos[ins.tipo] || 0) + 1; conteoInspectores[ins.inspector] = (conteoInspectores[ins.inspector] || 0) + 1; });
-  
-  const chartTipos = { labels: Object.keys(conteoTipos), datasets: [{ label: 'Cantidad', data: Object.values(conteoTipos), backgroundColor: ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'] }] };
-  const chartInspectores = { labels: Object.keys(conteoInspectores), datasets: [{ label: 'Inspecciones', data: Object.values(conteoInspectores), backgroundColor: '#003366' }] };
+  // --- PROCESAMIENTO DE DATOS CON FILTRO CRUZADO ---
+  const conteoInspectores: Record<string, number> = {};
+  // El gráfico de inspectores siempre muestra el total de la tabla filtrada por fecha/filtros superiores
+  dataTabla.forEach(ins => {
+    conteoInspectores[ins.inspector] = (conteoInspectores[ins.inspector] || 0) + 1;
+  });
+
+  // El gráfico de TIPOS depende de si seleccionamos un inspector en el gráfico de barras
+  const conteoTipos: Record<string, number> = {};
+  const dataParaGraficoTipos = selectedInspectorChart 
+    ? dataTabla.filter(ins => ins.inspector === selectedInspectorChart)
+    : dataTabla;
+
+  dataParaGraficoTipos.forEach(ins => {
+    conteoTipos[ins.tipo] = (conteoTipos[ins.tipo] || 0) + 1;
+  });
+
+  // Ordenar datos
+  const tiposOrdenados = Object.entries(conteoTipos).sort((a,b) => b[1] - a[1]);
+  const inspectoresOrdenados = Object.entries(conteoInspectores).sort((a,b) => b[1] - a[1]);
+
+  const chartTipos = {
+    labels: tiposOrdenados.map(t => t[0]),
+    datasets: [{ 
+      label: 'Cantidad', 
+      data: tiposOrdenados.map(t => t[1]), 
+      // Si hay un tipo seleccionado, resaltamos ese, si no, colores normales
+      backgroundColor: tiposOrdenados.map((t, i) => 
+        selectedTypeChart && t[0] !== selectedTypeChart ? '#e5e7eb' : ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'][i % 5]
+      )
+    }]
+  };
+
+  const chartInspectores = {
+    labels: inspectoresOrdenados.map(i => i[0]),
+    datasets: [{ 
+      label: 'Inspecciones', 
+      data: inspectoresOrdenados.map(i => i[1]), 
+      // Si hay un inspector seleccionado, resaltamos su barra en Amarillo
+      backgroundColor: inspectoresOrdenados.map(i => i[0] === selectedInspectorChart ? '#FFCC00' : '#003366') 
+    }]
+  };
+
+  // --- FILTRADO FINAL DE LA TABLA ---
+  // La tabla ahora se filtra adicionalmente por lo que toquemos en el gráfico de tipos
+  const dataFinalTabla = selectedTypeChart 
+    ? dataTabla.filter(ins => ins.tipo === selectedTypeChart)
+    : dataTabla;
 
   const chartOptionsNumbers = { maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { anchor: 'end' as const, align: 'end' as const, font: { weight: 'bold' as const }, formatter: (v:number) => v > 0 ? v : '' } }, scales: { y: { beginAtZero: true, grace: '10%' } } };
 
