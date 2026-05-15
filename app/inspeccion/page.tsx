@@ -2,10 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-<<<<<<< HEAD
-=======
-import SearchInput from '@/components/SearchInput';
->>>>>>> bcfe3a920d1f612d54f03b120e0476b4513182dd
 
 export default function InspeccionPage() {
   const [user, setUser] = useState<any>(null);
@@ -98,7 +94,6 @@ export default function InspeccionPage() {
   // COMPONENTES REUTILIZABLES PARA DIBUJAR LAS TABLAS EXACTAS
   // -------------------------------------------------------------
   const RatingTable = ({ title, items, options, prefix }: { title: string, items: {k:string, l:string}[], options: string[], prefix: string }) => (
-<<<<<<< HEAD
     <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm">
       <table className="w-full text-sm text-center bg-white border-collapse">
         <thead className="bg-[#003366] text-white">
@@ -122,43 +117,6 @@ export default function InspeccionPage() {
           ))}
         </tbody>
       </table>
-=======
-    <div className="mb-8 overflow-hidden border border-[#003366] rounded-xl shadow-md bg-white">
-      <div className="bg-[#003366] text-white p-3 font-bold uppercase text-center text-sm">{title}</div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-center border-collapse">
-          <thead>
-            <tr className="bg-[#002244] text-white text-[10px]">
-              <th className="p-2 text-left w-1/2">ITEM</th>
-              {options.map(o => <th key={o} className="p-2">{o}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, idx) => (
-              <tr key={`${prefix}-${item.k}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                <td className="p-3 text-left border-t border-r font-medium border-gray-100">{item.l}</td>
-                {options.map(opt => (
-                  <td key={`${prefix}-${item.k}-${opt}`} className="p-2 border-t border-gray-100">
-                    <input 
-                      type="radio" 
-                      name={`${prefix}_${item.k}`} 
-                      value={opt} 
-                      className="w-5 h-5 cursor-pointer accent-[#003366]" 
-                      checked={formData[`${prefix}_${item.k}`] === String(opt)}
-                      required
-                      onChange={(e) => {
-                        // Evita que el evento se propague y cause saltos
-                        setFormData(prev => ({ ...prev, [`${prefix}_${item.k}`]: e.target.value }));
-                      }} 
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
->>>>>>> bcfe3a920d1f612d54f03b120e0476b4513182dd
     </div>
   );
 
@@ -192,26 +150,14 @@ export default function InspeccionPage() {
                   <div className="flex justify-center gap-2">
                     {['E', 'MB', 'B', 'R'].map(opt => (
                       <label key={opt} className="flex items-center gap-1 text-xs cursor-pointer">
-<<<<<<< HEAD
                         <input type="radio" name={`descanso_${item.k}`} value={opt} required onChange={(e) => setFormData({...formData, [`descanso_${item.k}`]: e.target.value})} />
-=======
-                        <input type="radio" 
-                        name={`descanso_${item.k}`} 
-                        value={opt} 
-                        checked={formData[`descanso_${item.k}`] === opt} 
-                        required onChange={(e) => setFormData({...formData, [`descanso_${item.k}`]: e.target.value})} />
->>>>>>> bcfe3a920d1f612d54f03b120e0476b4513182dd
                         {opt}
                       </label>
                     ))}
                   </div>
                 </td>
                 <td className="p-2 border-t border-gray-200">
-<<<<<<< HEAD
                   <textarea className="w-full border rounded p-1 text-xs" rows={2} onChange={(e) => setFormData({...formData,[`obs_${item.k}`]: e.target.value})}></textarea>
-=======
-                  <textarea className="w-full border rounded p-1 text-xs" rows={2} value={formData[`obs_${item.k}`] || ''} onChange={(e) => setFormData({...formData,[`obs_${item.k}`]: e.target.value})}></textarea>
->>>>>>> bcfe3a920d1f612d54f03b120e0476b4513182dd
                 </td>
               </tr>
             ))}
@@ -225,23 +171,11 @@ export default function InspeccionPage() {
     <div className="space-y-4 mb-6 border-b pb-6">
       <div>
         <label className="text-xs font-bold text-[#003366] flex items-center gap-1"><span className="text-blue-500">🔍</span> Conductor (Escriba 3 letras)</label>
-<<<<<<< HEAD
         <input type="text" placeholder="Buscar conductor..." className="w-full p-2 border rounded" onChange={(e) => setFormData({...formData, conductor: e.target.value})} required />
-=======
-        <SearchInput 
-          label="🔍 Conductor (Escriba 3 letras)" 
-          placeholder="Buscar conductor..."
-          table="conductores"
-          column="nombre_completo"
-          onSelect={(val) => setFormData({...formData, conductor: val})}
-          required={true}
-        />
->>>>>>> bcfe3a920d1f612d54f03b120e0476b4513182dd
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-xs font-bold text-[#003366] flex items-center gap-1">🚌 Unidad N° (Escriba 2 letras)</label>
-<<<<<<< HEAD
           <input type="text" placeholder="Buscar unidad..." className="w-full p-2 border rounded" onChange={(e) => setFormData({...formData, unidad: e.target.value})} required />
         </div>
         <div>
@@ -255,41 +189,6 @@ export default function InspeccionPage() {
           <input type="text" placeholder="Buscar instructor..." className="w-full p-2 border rounded" onChange={(e) => setFormData({...formData, instructor: e.target.value})} required />
         </div>
       )}
-=======
-          <SearchInput 
-            label="🚌 Unidad N°" 
-            placeholder="Buscar unidad..."
-            table="unidades"
-            column="numero_unidad"
-            onSelect={(val) => setFormData({...formData, unidad: val})}
-            required={true}
-          />
-        </div>
-        <div>
-          <label className="text-xs font-bold text-[#003366]">Servicio (Escriba 3 letras)</label>
-            <SearchInput 
-            label="🚌 Unidad N°" 
-            placeholder="Buscar servicio..."
-            table="servicios"
-            column="descripcion"
-            onSelect={(val) => setFormData({...formData, servicio: val})}
-            required={true}
-          />
-        </div>
-      </div>
-    {includesInstructor && (
-      <div className="pt-4 border-t mt-4">
-        <SearchInput 
-          label="👨‍🏫 Instructor / Tutor" 
-          placeholder="Buscar instructor..."
-          table="conductores" // Usa la misma tabla de conductores
-          column="nombre_completo"
-          onSelect={(val) => setFormData(prev => ({...prev, instructor: val}))}
-          required={true}
-        />
-      </div>
-    )}
->>>>>>> bcfe3a920d1f612d54f03b120e0476b4513182dd
     </div>
   );
 
@@ -318,11 +217,7 @@ export default function InspeccionPage() {
         <div className="grid grid-cols-2">
           <div className="p-3 border-r border-b font-bold bg-white flex items-center">Micronauta</div>
           <div className="p-3 border-b bg-gray-50">
-<<<<<<< HEAD
             <label className="block"><input type="radio" name="micron_existe" value="Existe" onChange={(e)=>setFormData({...formData, micron_existe: e.target.value})}/> Existe</label>
-=======
-            <label className="block"><input type="radio" name="micron_existe" value="Existe" checked={formData.micron_existe === 'Existe'}  onChange={(e)=>setFormData({...formData, micron_existe: e.target.value})}/> Existe</label>
->>>>>>> bcfe3a920d1f612d54f03b120e0476b4513182dd
             <label className="block"><input type="radio" name="micron_existe" value="No Existe" onChange={(e)=>setFormData({...formData, micron_existe: e.target.value})}/> No Existe</label>
           </div>
           <div className="p-3 border-r border-b bg-white">Func. Equipo</div>
