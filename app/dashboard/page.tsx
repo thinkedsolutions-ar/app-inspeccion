@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement);
+// Registramos el plugin de etiquetas
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement, ChartDataLabels);
 
 export default function DashboardPage() {
   const [adminUser, setAdminUser] = useState<any>(null);
@@ -16,13 +18,11 @@ export default function DashboardPage() {
   const [followups, setFollowups] = useState<any[]>([]);
   const [usuarios, setUsuarios] = useState<any[]>([]);
   
-  // Filtros Dashboard
   const [fechaInicio, setFechaInicio] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; });
   const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
   const [chkSeguimiento, setChkSeguimiento] = useState(false);
   const [chkObservaciones, setChkObservaciones] = useState(false);
 
-  // Modal Ver Detalle
   const [modalIns, setModalIns] = useState<any>(null);
   const [nuevoComentario, setNewComentario] = useState('');
 
@@ -37,7 +37,6 @@ export default function DashboardPage() {
 
   const fetchData = async () => {
     setLoading(true);
-    // Para la gráfica evolutiva, traemos todo el último año
     const dYearAgo = new Date(); dYearAgo.setFullYear(dYearAgo.getFullYear() - 1);
     
     const [resIns, resFol] = await Promise.all([
@@ -55,7 +54,6 @@ export default function DashboardPage() {
     if (data) setUsuarios(data);
   };
 
-  // --- LOGICA SEGUIMIENTO (MODAL) ---
   const handleAddComentario = async () => {
     if (!nuevoComentario.trim()) return;
     setLoading(true);
@@ -70,8 +68,6 @@ export default function DashboardPage() {
     await fetchData(); setModalIns(null); setLoading(false);
   };
 
-  // --- PROCESAMIENTO DE DATOS ---
-  // 1. Filtrar para la Tabla
   const getInspectionStatus = (id: string) => {
     const f = followups.filter(x => x.inspection_id === id);
     if (f.length === 0) return 'SIN SEGUIMIENTO';
@@ -79,6 +75,7 @@ export default function DashboardPage() {
     return 'ABIERTO';
   };
 
+  // --- FILTRADO PRINCIPAL PARA TABLA Y GRÁFICOS INFERIORES ---
   const dataTabla = inspecciones.filter(ins => {
     const dateOk = ins.created_at >= `${fechaInicio}T00:00:00Z` && ins.created_at <= `${fechaFin}T23:59:59Z`;
     if (!dateOk) return false;
@@ -88,7 +85,7 @@ export default function DashboardPage() {
     return true;
   });
 
-  // 2. Gráfico Evolutivo (Últimos 12 meses)
+  // --- 1. GRÁFICO EVOLUTIVO (Histórico 12 Meses) ---
   const last12Months = Array.from({length: 12}, (_, i) => {
     const d = new Date(); d.setMonth(d.getMonth() - (11 - i));
     return d.toLocaleString('es-ES', { month: 'short', year: '2-digit' });
@@ -101,18 +98,50 @@ export default function DashboardPage() {
     if (idx >= 0) trendData[idx]++;
   });
 
-  // 3. Gráfico Apilado (Inspector x Tipo) - Solo rango filtrado
+  // --- 2. GRÁFICOS RECUPERADOS (Por Tipo e Inspector) ---
+  const conteoTipos: Record<string, number> = {};
+  const conteoInspectores: Record<string, number> = {};
+  dataTabla.forEach(ins => {
+    conteoTipos[ins.tipo] = (conteoTipos[ins.tipo] || 0) + 1;
+    conteoInspectores[ins.inspector] = (conteoInspectores[ins.inspector] || 0) + 1;
+  });
+
+  // Ordenar de mayor a menor para que se vea como en tu captura
+  const tiposOrdenados = Object.entries(conteoTipos).sort((a,b) => b[1] - a[1]);
+  const chartTipos = {
+    labels: tiposOrdenados.map(t => t[0]),
+    datasets: [{ label: 'Cantidad', data: tiposOrdenados.map(t => t[1]), backgroundColor: ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'] }]
+  };
+
+  const inspectoresOrdenados = Object.entries(conteoInspectores).sort((a,b) => b[1] - a[1]);
+  const chartInspectores = {
+    labels: inspectoresOrdenados.map(i => i[0]),
+    datasets: [{ label: 'Inspecciones', data: inspectoresOrdenados.map(i => i[1]), backgroundColor: '#003366' }]
+  };
+
+  // --- 3. GRÁFICO APILADO ---
   const types = Array.from(new Set(dataTabla.map(i => i.tipo)));
   const inspectors = Array.from(new Set(dataTabla.map(i => i.inspector)));
   const palette = ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'];
-  
   const chartStacked = {
     labels: inspectors,
     datasets: types.map((type, i) => ({
-      label: type,
-      backgroundColor: palette[i % palette.length],
+      label: type, backgroundColor: palette[i % palette.length],
       data: inspectors.map(insp => dataTabla.filter(ins => ins.inspector === insp && ins.tipo === type).length)
     }))
+  };
+
+  // Configuración base para que los números floten arriba de las barras y líneas
+  const chartOptionsNumbers = {
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      datalabels: {
+        anchor: 'end' as const, align: 'end' as const, color: '#333', font: { weight: 'bold' as const },
+        formatter: (val: number) => val > 0 ? val : ''
+      }
+    },
+    scales: { y: { beginAtZero: true, grace: '10%' } }
   };
 
   if (!adminUser) return <div className="p-10 text-center">Cargando...</div>;
@@ -156,16 +185,41 @@ export default function DashboardPage() {
                       <h3 className="text-gray-400 font-bold uppercase text-[10px]">Total Inspecciones</h3>
                       <div className="text-4xl font-black text-[#003366]">{dataTabla.length}</div>
                     </div>
-                    <div className="flex-1 h-24">
-                      <Line data={{ labels: last12Months, datasets: [{ data: trendData, borderColor: '#3b82f6', backgroundColor: '#dc3545', pointRadius: 4, tension: 0.3 }] }} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } } } }} />
+                    <div className="flex-1 h-32">
+                      <Line 
+                        data={{ labels: last12Months, datasets: [{ data: trendData, borderColor: '#3b82f6', backgroundColor: '#dc3545', pointRadius: 4, tension: 0.3 }] }} 
+                        options={chartOptionsNumbers} 
+                      />
+                    </div>
+                  </div>
+
+                  {/* GRÁFICOS RECUPERADOS: TIPOS E INSPECTORES */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                      <h3 className="text-[#003366] font-bold mb-4">Distribución por Tipo</h3>
+                      <div className="h-64"><Bar data={chartTipos} options={chartOptionsNumbers} /></div>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                      <h3 className="text-[#003366] font-bold mb-4">Total por Inspector</h3>
+                      <div className="h-64"><Bar data={chartInspectores} options={chartOptionsNumbers} /></div>
                     </div>
                   </div>
 
                   {/* GRAFICO APILADO */}
                   <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-[#003366] font-bold mb-4">Detalle por Inspector y Tipo</h3>
-                    <div className="h-64">
-                      <Bar data={chartStacked} options={{ maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }} />
+                    <div className="h-72">
+                      <Bar 
+                        data={chartStacked} 
+                        options={{ 
+                          maintainAspectRatio: false, 
+                          plugins: { 
+                            legend: { position: 'top' },
+                            datalabels: { color: '#fff', font: { weight: 'bold' as const }, formatter: (v:number) => v > 0 ? v : '' }
+                          },
+                          scales: { x: { stacked: true }, y: { stacked: true } } 
+                        }} 
+                      />
                     </div>
                   </div>
 
@@ -219,7 +273,6 @@ export default function DashboardPage() {
             </div>
             
             <div className="p-6 overflow-y-auto flex-1 bg-gray-50">
-              {/* DATOS DEL FORMULARIO */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
                 <div className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#003366] block uppercase">Inspector</label><span className="text-sm font-medium">{modalIns.inspector}</span></div>
                 <div className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#003366] block uppercase">Tipo</label><span className="text-sm font-medium">{modalIns.tipo}</span></div>
@@ -234,7 +287,6 @@ export default function DashboardPage() {
                 })}
               </div>
 
-              {/* FOTOS */}
               {modalIns.fotos && modalIns.fotos.length > 0 && (
                 <div className="mb-6">
                   <h3 className="font-bold text-[#003366] border-b pb-2 mb-3">Fotos de Respaldo</h3>
@@ -246,7 +298,6 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* SEGUIMIENTO */}
               <div className="bg-white p-4 rounded border-t-4 border-[#FFCC00] shadow-sm">
                 <h3 className="font-bold text-[#003366] flex items-center gap-2 mb-4">📝 Seguimiento y Acciones</h3>
                 <div className="space-y-2 mb-4 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded border">
@@ -259,13 +310,12 @@ export default function DashboardPage() {
                     ))
                   )}
                 </div>
-
                 {!getInspectionStatus(modalIns.id).includes('CERRADO') && (
                   <div className="space-y-3">
                     <textarea className="w-full border p-3 rounded text-sm bg-gray-50" rows={2} placeholder="Nuevo comentario de seguimiento..." value={nuevoComentario} onChange={(e) => setNewComentario(e.target.value)}></textarea>
                     <div className="flex gap-2">
                       <button onClick={handleAddComentario} className="flex-1 bg-green-600 text-white font-bold p-3 rounded hover:bg-green-700" disabled={loading}>AÑADIR COMENTARIO</button>
-                      <button onClick={handleCerrarTema} className="flex-1 bg-red-600 text-white font-bold p-3 rounded hover:bg-red-700 flex justify-center items-center gap-2" disabled={loading}>🔒 MARCAR COMO CERRADO</button>
+                      <button onClick={handleCerrarTema} className="flex-1 bg-red-600 text-white font-bold p-3 rounded hover:bg-red-700" disabled={loading}>🔒 MARCAR COMO CERRADO</button>
                     </div>
                   </div>
                 )}
