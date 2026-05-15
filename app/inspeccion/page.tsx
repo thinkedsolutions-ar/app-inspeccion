@@ -315,33 +315,30 @@ export default function InspeccionPage() {
                   {renderSearchFields()}
                   {renderRatingTable("Limpieza de la Unidad", [{k:'int', l:'Interior'}, {k:'ext', l:'Exterior'}, {k:'cab', l:'Cabezales'}, {k:'bano', l:'Baño'}, {k:'ac', l:'A/C - CALEF.'}], ['1','2','3','4','5','N/C'], "limp")}
                   {renderRatingTable("Evaluación del Conductor", [{k:'horarios', l:'Cumplimiento Horarios'}, {k:'uniforme', l:'Uniforme'}, {k:'atencion', l:'Atención al Usuario'}, {k:'cond', l:'Conducción'}], ['1','2','3','4','5','N/C'], "eval")}
-                  <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm text-sm text-center">
-                    <div className="bg-[#003366] text-white p-2 font-bold uppercase">Equipamiento y Sistemas</div>
-                    <div className="grid grid-cols-2 bg-gray-50 p-2 gap-2 text-left">
-                      <div className="font-bold self-center text-xs text-[#003366]">Micronauta</div>
-                      <div><select className="w-full border p-1 rounded bg-white" value={formData.micron_existe || ''} onChange={(e)=>handleChange('micron_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
-                      
-                      <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo Micronauta</div>
-                      <div><select className="w-full border p-1 rounded bg-white" value={formData.micron_func || ''} onChange={(e)=>handleChange('micron_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
-                      
-                      <div className="font-bold self-center text-xs text-[#003366]">Cant. Pasajeros Micronauta</div>
-                      <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.micron_pasajeros || ''} onChange={(e)=>handleChange('micron_pasajeros',e.target.value)} /></div>
-                      
-                      <div className="col-span-2 border-t my-1 border-gray-200"></div>
+                    <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm text-sm text-center">
+                      <div className="bg-[#003366] text-white p-2 font-bold uppercase">Equipamiento y Sistemas</div>
+                      <div className="grid grid-cols-2 bg-gray-50 p-2 gap-2 text-left">
+                        <div className="font-bold self-center text-xs text-[#003366]">Micronauta</div>
+                        <div><select className="w-full border p-1 rounded bg-white" value={formData.micron_existe || ''} onChange={(e)=>handleChange('micron_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
+                        
+                        <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo Micronauta</div>
+                        <div><select className="w-full border p-1 rounded bg-white" value={formData.micron_func || ''} onChange={(e)=>handleChange('micron_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
+                        
+                        <div className="font-bold self-center text-xs text-[#003366]">Cant. Pasajeros Micronauta</div>
+                        <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.micron_pasajeros || ''} onChange={(e)=>handleChange('micron_pasajeros',e.target.value)} /></div>
+                        
+                        <div className="col-span-2 border-t my-1 border-gray-200"></div>
 
-                      <div className="font-bold self-center text-xs text-[#003366]">SUBE</div>
-                      <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_existe || ''} onChange={(e)=>handleChange('sube_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
-                      
-                      <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo SUBE</div>
-                      <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_func || ''} onChange={(e)=>handleChange('sube_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
-                      
-                      <div className="font-bold self-center text-xs text-[#003366]">Cant. de Func. Equipo SUBE</div>
-                      <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_cant_func || ''} onChange={(e)=>handleChange('sube_cant_func',e.target.value)} /></div>
-                      
-                      <div className="font-bold self-center text-xs text-[#003366]">Inspecciones SUBE realizadas</div>
-                      <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_inspecciones || ''} onChange={(e)=>handleChange('sube_inspecciones',e.target.value)} /></div>
+                        <div className="font-bold self-center text-xs text-[#003366]">SUBE</div>
+                        <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_existe || ''} onChange={(e)=>handleChange('sube_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
+                        
+                        <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo SUBE</div>
+                        <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_func || ''} onChange={(e)=>handleChange('sube_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
+                                       
+                        <div className="font-bold self-center text-xs text-[#003366]">Inspecciones SUBE realizadas</div>
+                        <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_inspecciones || ''} onChange={(e)=>handleChange('sube_inspecciones',e.target.value)} /></div>
+                      </div>
                     </div>
-                  </div>
                 </>
               )}
 
