@@ -4,8 +4,13 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+import dynamic from 'next/dynamic';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement);
+// Importamos el mapa dinámicamente para que no rompa el servidor
+const MapComponent = dynamic(() => import('./MapComponent'), { ssr: false });
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement, ChartDataLabels);
 
 export default function DashboardPage() {
   const [adminUser, setAdminUser] = useState<any>(null);
@@ -16,15 +21,18 @@ export default function DashboardPage() {
   const [followups, setFollowups] = useState<any[]>([]);
   const [usuarios, setUsuarios] = useState<any[]>([]);
   
-  // Filtros Dashboard
   const [fechaInicio, setFechaInicio] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; });
   const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
+  
+  // Nuevos Filtros
   const [chkSeguimiento, setChkSeguimiento] = useState(false);
   const [chkObservaciones, setChkObservaciones] = useState(false);
+  const [filtroInspector, setFiltroInspector] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
 
-  // Modal Ver Detalle
   const [modalIns, setModalIns] = useState<any>(null);
   const [nuevoComentario, setNewComentario] = useState('');
+  const [newUser, setNewUser] = useState({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' });
 
   useEffect(() => {
     const session = localStorage.getItem('buttini_user');
@@ -37,17 +45,12 @@ export default function DashboardPage() {
 
   const fetchData = async () => {
     setLoading(true);
-    // Para la gráfica evolutiva, traemos todo el último año
     const dYearAgo = new Date(); dYearAgo.setFullYear(dYearAgo.getFullYear() - 1);
-    
     const [resIns, resFol] = await Promise.all([
       supabase.from('inspections').select('*').gte('created_at', dYearAgo.toISOString()).order('created_at', { ascending: false }),
       supabase.from('followups').select('*').order('created_at', { ascending: true })
     ]);
-
-    setInspecciones(resIns.data || []);
-    setFollowups(resFol.data || []);
-    setLoading(false);
+    setInspecciones(resIns.data || []); setFollowups(resFol.data || []); setLoading(false);
   };
 
   const fetchUsers = async () => {
@@ -55,7 +58,26 @@ export default function DashboardPage() {
     if (data) setUsuarios(data);
   };
 
-  // --- LOGICA SEGUIMIENTO (MODAL) ---
+  // --- LOGICA USUARIOS ---
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.from('users').insert([newUser]);
+    if (error) alert("Error: " + error.message);
+    else { alert("Usuario creado"); setNewUser({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' }); fetchUsers(); }
+  };
+
+  const handleDeleteUser = async (id: string, username: string) => {
+    if (confirm(`¿Eliminar al usuario ${username}?`)) { await supabase.from('users').delete().eq('id', id); fetchUsers(); }
+  };
+
+  const handleResetPassword = async (id: string, username: string) => {
+    const newPass = prompt(`Ingrese la NUEVA CONTRASEÑA para ${username}:`);
+    if (!newPass) return;
+    const { error } = await supabase.from('users').update({ password: newPass }).eq('id', id);
+    if (error) alert("Error al cambiar clave"); else alert("Contraseña actualizada exitosamente.");
+  };
+
+  // --- LOGICA SEGUIMIENTO ---
   const handleAddComentario = async () => {
     if (!nuevoComentario.trim()) return;
     setLoading(true);
@@ -64,14 +86,12 @@ export default function DashboardPage() {
   };
 
   const handleCerrarTema = async () => {
-    if(!confirm("¿Desea cerrar el seguimiento? Desaparecerá de la pantalla del inspector.")) return;
+    if(!confirm("¿Cerrar seguimiento?")) return;
     setLoading(true);
     await supabase.from('followups').insert([{ inspection_id: modalIns.id, usuario: adminUser.nombre, accion: '[CERRADO] El tema ha sido cerrado por el administrador.' }]);
     await fetchData(); setModalIns(null); setLoading(false);
   };
 
-  // --- PROCESAMIENTO DE DATOS ---
-  // 1. Filtrar para la Tabla
   const getInspectionStatus = (id: string) => {
     const f = followups.filter(x => x.inspection_id === id);
     if (f.length === 0) return 'SIN SEGUIMIENTO';
@@ -79,41 +99,36 @@ export default function DashboardPage() {
     return 'ABIERTO';
   };
 
+  // --- FILTRADO AVANZADO (Tabla y Mapa) ---
   const dataTabla = inspecciones.filter(ins => {
     const dateOk = ins.created_at >= `${fechaInicio}T00:00:00Z` && ins.created_at <= `${fechaFin}T23:59:59Z`;
     if (!dateOk) return false;
-    const status = getInspectionStatus(ins.id);
-    if (chkSeguimiento && status === 'SIN SEGUIMIENTO') return false;
+    if (chkSeguimiento && getInspectionStatus(ins.id) === 'SIN SEGUIMIENTO') return false;
     if (chkObservaciones && (!ins.obs_general || ins.obs_general.trim() === '')) return false;
+    if (filtroInspector && ins.inspector !== filtroInspector) return false;
+    if (filtroTipo && ins.tipo !== filtroTipo) return false;
     return true;
   });
 
-  // 2. Gráfico Evolutivo (Últimos 12 meses)
-  const last12Months = Array.from({length: 12}, (_, i) => {
-    const d = new Date(); d.setMonth(d.getMonth() - (11 - i));
-    return d.toLocaleString('es-ES', { month: 'short', year: '2-digit' });
-  });
+  const inspectoresUnicos = Array.from(new Set(inspecciones.map(i => i.inspector))).sort();
+  const tiposUnicos = Array.from(new Set(inspecciones.map(i => i.tipo))).sort();
+
+  // --- GRÁFICOS ---
+  const last12Months = Array.from({length: 12}, (_, i) => { const d = new Date(); d.setMonth(d.getMonth() - (11 - i)); return d.toLocaleString('es-ES', { month: 'short', year: '2-digit' }); });
   const trendData = new Array(12).fill(0);
   inspecciones.forEach(ins => {
     const d = new Date(ins.created_at);
-    const label = d.toLocaleString('es-ES', { month: 'short', year: '2-digit' });
-    const idx = last12Months.indexOf(label);
+    const idx = last12Months.indexOf(d.toLocaleString('es-ES', { month: 'short', year: '2-digit' }));
     if (idx >= 0) trendData[idx]++;
   });
 
-  // 3. Gráfico Apilado (Inspector x Tipo) - Solo rango filtrado
-  const types = Array.from(new Set(dataTabla.map(i => i.tipo)));
-  const inspectors = Array.from(new Set(dataTabla.map(i => i.inspector)));
-  const palette = ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'];
+  const conteoTipos: Record<string, number> = {}; const conteoInspectores: Record<string, number> = {};
+  dataTabla.forEach(ins => { conteoTipos[ins.tipo] = (conteoTipos[ins.tipo] || 0) + 1; conteoInspectores[ins.inspector] = (conteoInspectores[ins.inspector] || 0) + 1; });
   
-  const chartStacked = {
-    labels: inspectors,
-    datasets: types.map((type, i) => ({
-      label: type,
-      backgroundColor: palette[i % palette.length],
-      data: inspectors.map(insp => dataTabla.filter(ins => ins.inspector === insp && ins.tipo === type).length)
-    }))
-  };
+  const chartTipos = { labels: Object.keys(conteoTipos), datasets: [{ label: 'Cantidad', data: Object.values(conteoTipos), backgroundColor: ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'] }] };
+  const chartInspectores = { labels: Object.keys(conteoInspectores), datasets: [{ label: 'Inspecciones', data: Object.values(conteoInspectores), backgroundColor: '#003366' }] };
+
+  const chartOptionsNumbers = { maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { anchor: 'end' as const, align: 'end' as const, font: { weight: 'bold' as const }, formatter: (v:number) => v > 0 ? v : '' } }, scales: { y: { beginAtZero: true, grace: '10%' } } };
 
   if (!adminUser) return <div className="p-10 text-center">Cargando...</div>;
 
@@ -122,12 +137,10 @@ export default function DashboardPage() {
       
       {/* SIDEBAR */}
       <div className="w-64 bg-[#003366] text-white flex flex-col shadow-xl z-20 shrink-0">
-        <div className="p-6 bg-white m-4 rounded-lg text-center">
-          <img src="https://i.ibb.co/RG0tNq6t/Logo-Web-copia.png" className="h-10 mx-auto" alt="Logo" />
-          <div className="text-[#003366] text-[10px] font-black mt-2">GESTIÓN OPERATIVA V3</div>
-        </div>
+        <div className="p-6 bg-white m-4 rounded-lg text-center"><img src="https://i.ibb.co/RG0tNq6t/Logo-Web-copia.png" className="h-10 mx-auto" alt="Logo" /><div className="text-[#003366] text-[10px] font-black mt-2">GESTIÓN OPERATIVA V3</div></div>
         <nav className="flex-1 px-2 space-y-2">
           <button onClick={() => setActiveTab('reportes')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'reportes' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>📊 Reportes</button>
+          <button onClick={() => setActiveTab('mapa')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'mapa' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>📍 Mapa Satelital</button>
           <button onClick={() => setActiveTab('usuarios')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'usuarios' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>⚙️ Usuarios</button>
         </nav>
         <div className="p-4"><button onClick={() => { localStorage.removeItem('buttini_user'); window.location.href = '/'; }} className="w-full bg-red-600 p-3 rounded-lg font-bold hover:bg-red-700">CERRAR SESIÓN</button></div>
@@ -136,63 +149,60 @@ export default function DashboardPage() {
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* TOP BAR FILTROS */}
         <div className="bg-white p-4 shadow-sm flex justify-between items-center z-10 shrink-0 border-b">
-          <div className="flex gap-4 items-center">
-            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="border p-2 rounded text-sm" />
-            <span className="text-gray-400">→</span>
-            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="border p-2 rounded text-sm" />
+          <div className="flex gap-4 items-center flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-500 uppercase">Desde</span>
+              <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="border p-2 rounded text-sm bg-gray-50" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-500 uppercase">Hasta</span>
+              <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="border p-2 rounded text-sm bg-gray-50" />
+            </div>
+            
+            {/* Nuevos Filtros Globales (Afectan Tabla y Mapa) */}
+            <select value={filtroInspector} onChange={(e)=>setFiltroInspector(e.target.value)} className="border p-2 rounded text-sm bg-white font-bold text-[#003366]">
+              <option value="">Todos los Inspectores</option>
+              {inspectoresUnicos.map((i:any) => <option key={i} value={i}>{i}</option>)}
+            </select>
+            <select value={filtroTipo} onChange={(e)=>setFiltroTipo(e.target.value)} className="border p-2 rounded text-sm bg-white font-bold text-[#003366] max-w-xs">
+              <option value="">Todos los Tipos</option>
+              {tiposUnicos.map((t:any) => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
           <div className="font-bold text-[#003366]">👤 {adminUser.nombre}</div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
-          {loading ? <div className="text-center mt-20">Cargando datos...</div> : (
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+          {loading ? <div className="text-center mt-20 font-bold text-xl animate-pulse">Cargando datos en vivo...</div> : (
             <>
+              {/* --- REPORTES --- */}
               {activeTab === 'reportes' && (
                 <div className="space-y-6">
-                  
-                  {/* KPI Y TENDENCIA */}
                   <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-6">
-                    <div className="min-w-[150px] border-r pr-4">
-                      <h3 className="text-gray-400 font-bold uppercase text-[10px]">Total Inspecciones</h3>
-                      <div className="text-4xl font-black text-[#003366]">{dataTabla.length}</div>
-                    </div>
-                    <div className="flex-1 h-24">
-                      <Line data={{ labels: last12Months, datasets: [{ data: trendData, borderColor: '#3b82f6', backgroundColor: '#dc3545', pointRadius: 4, tension: 0.3 }] }} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } } } }} />
-                    </div>
+                    <div className="min-w-[150px] border-r pr-4"><h3 className="text-gray-400 font-bold uppercase text-[10px]">Total Inspecciones</h3><div className="text-4xl font-black text-[#003366]">{dataTabla.length}</div></div>
+                    <div className="flex-1 h-32"><Line data={{ labels: last12Months, datasets: [{ data: trendData, borderColor: '#3b82f6', backgroundColor: '#dc3545', pointRadius: 4, tension: 0.3 }] }} options={chartOptionsNumbers} /></div>
                   </div>
-
-                  {/* GRAFICO APILADO */}
-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="text-[#003366] font-bold mb-4">Detalle por Inspector y Tipo</h3>
-                    <div className="h-64">
-                      <Bar data={chartStacked} options={{ maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }} />
-                    </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#003366] font-bold mb-4">Distribución por Tipo</h3><div className="h-64"><Bar data={chartTipos} options={chartOptionsNumbers} /></div></div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#003366] font-bold mb-4">Total por Inspector</h3><div className="h-64"><Bar data={chartInspectores} options={chartOptionsNumbers} /></div></div>
                   </div>
-
-                  {/* TABLA DE REGISTROS */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col h-[500px]">
-                    <div className="bg-gray-50 p-4 border-b flex justify-between items-center shrink-0">
+                  <div className="bg-white rounded-xl shadow-sm border flex flex-col h-[500px]">
+                    <div className="bg-gray-50 p-4 border-b flex justify-between items-center shrink-0 flex-wrap gap-2">
                       <div className="font-bold text-[#003366] text-lg">Registro Detallado</div>
                       <div className="flex gap-4">
-                        <label className="flex items-center gap-2 bg-[#fffbe6] px-3 py-1 border border-yellow-200 rounded cursor-pointer text-xs font-bold text-[#003366]"><input type="checkbox" checked={chkSeguimiento} onChange={e=>setChkSeguimiento(e.target.checked)}/> 🔍 Solo con Seguimiento</label>
-                        <label className="flex items-center gap-2 bg-[#fffbe6] px-3 py-1 border border-yellow-200 rounded cursor-pointer text-xs font-bold text-[#003366]"><input type="checkbox" checked={chkObservaciones} onChange={e=>setChkObservaciones(e.target.checked)}/> 🔍 Solo con Observaciones</label>
+                        <label className="flex items-center gap-2 bg-[#fffbe6] px-3 py-1 border border-yellow-200 rounded cursor-pointer text-xs font-bold text-[#003366]"><input type="checkbox" checked={chkSeguimiento} onChange={e=>setChkSeguimiento(e.target.checked)}/> Solo Seguimiento</label>
+                        <label className="flex items-center gap-2 bg-[#fffbe6] px-3 py-1 border border-yellow-200 rounded cursor-pointer text-xs font-bold text-[#003366]"><input type="checkbox" checked={chkObservaciones} onChange={e=>setChkObservaciones(e.target.checked)}/> Solo Observaciones</label>
                       </div>
                     </div>
                     <div className="overflow-y-auto flex-1 relative">
                       <table className="w-full text-sm text-left">
-                        <thead className="bg-white text-[#003366] sticky top-0 shadow-sm z-10">
-                          <tr><th className="p-3">Fecha/Lugar</th><th className="p-3">Inspector</th><th className="p-3">Tipo</th><th className="p-3">Observaciones</th><th className="p-3 text-center">Acción</th><th className="p-3 text-center">Estado</th></tr>
-                        </thead>
+                        <thead className="bg-white text-[#003366] sticky top-0 shadow-sm z-10"><tr><th className="p-3">Fecha</th><th className="p-3">Inspector</th><th className="p-3">Tipo</th><th className="p-3">Observaciones</th><th className="p-3 text-center">Acción</th><th className="p-3 text-center">Estado</th></tr></thead>
                         <tbody>
                           {dataTabla.map(ins => (
                             <tr key={ins.id} className="border-b hover:bg-gray-50">
-                              <td className="p-3 whitespace-nowrap">
-                                <a href={`https://www.google.com/maps/search/?api=1&query=${ins.lat},${ins.lon}`} target="_blank" className="text-blue-600 hover:underline font-bold" title="Ver en Mapa">
-                                  {new Date(ins.created_at).toLocaleDateString()} {new Date(ins.created_at).toLocaleTimeString().slice(0,5)} 📍
-                                </a>
-                              </td>
+                              <td className="p-3 font-medium">{new Date(ins.created_at).toLocaleDateString()} {new Date(ins.created_at).toLocaleTimeString().slice(0,5)}</td>
                               <td className="p-3 font-bold">{ins.inspector}</td>
-                              <td className="p-3"><span className="bg-gray-100 px-2 py-1 rounded text-[10px] font-bold border">{ins.tipo}</span></td>
+                              <td className="p-3"><span className="bg-gray-100 px-2 py-1 rounded text-[10px] font-bold border truncate block max-w-[200px]">{ins.tipo}</span></td>
                               <td className="p-3 text-xs text-gray-600 max-w-[200px] truncate">{ins.obs_general}</td>
                               <td className="p-3 text-center"><button onClick={() => setModalIns(ins)} className="bg-[#FFCC00] text-[#003366] px-3 py-1 rounded font-bold text-xs">VER</button></td>
                               <td className="p-3 text-center text-[10px] font-bold uppercase">{getInspectionStatus(ins.id)}</td>
@@ -204,69 +214,89 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
+
+              {/* --- MAPA SATELITAL --- */}
+              {activeTab === 'mapa' && (
+                <div className="h-full flex flex-col bg-white rounded-xl shadow-sm border p-4">
+                  <div className="mb-4 flex justify-between items-center">
+                    <h2 className="text-[#003366] font-bold text-lg">📍 Mapa de Inspecciones</h2>
+                    <span className="bg-green-100 text-green-800 px-3 py-1 rounded text-xs font-bold border border-green-200">{dataTabla.length} Puntos encontrados</span>
+                  </div>
+                  <div className="flex-1 rounded-xl overflow-hidden border">
+                    <MapComponent inspecciones={dataTabla} onVerFicha={(ins:any) => setModalIns(ins)} />
+                  </div>
+                </div>
+              )}
+
+              {/* --- USUARIOS --- */}
+              {activeTab === 'usuarios' && (
+                <div className="space-y-6">
+                  <div className="bg-white p-6 rounded-xl shadow-sm border">
+                    <h3 className="text-[#003366] font-bold mb-4">Agregar Nuevo Usuario</h3>
+                    <form onSubmit={handleCreateUser} className="flex flex-wrap gap-4 items-end">
+                      <div className="flex-1 min-w-[150px]"><label className="block text-xs font-bold text-gray-500 mb-1">Usuario (Login)</label><input type="text" className="w-full border p-2 rounded bg-gray-50" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required /></div>
+                      <div className="flex-1 min-w-[150px]"><label className="block text-xs font-bold text-gray-500 mb-1">Clave</label><input type="password" className="w-full border p-2 rounded bg-gray-50" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required /></div>
+                      <div className="flex-1 min-w-[200px]"><label className="block text-xs font-bold text-gray-500 mb-1">Nombre Completo</label><input type="text" className="w-full border p-2 rounded bg-gray-50" value={newUser.nombre} onChange={e => setNewUser({...newUser, nombre: e.target.value})} required /></div>
+                      <div><label className="block text-xs font-bold text-gray-500 mb-1">Rol</label><select className="w-full border p-2 rounded bg-white" value={newUser.rol} onChange={e => setNewUser({...newUser, rol: e.target.value})}><option value="Inspector">Inspector</option><option value="Admin">Admin</option></select></div>
+                      <div><label className="block text-xs font-bold text-gray-500 mb-1">Jornada Mínima</label><select className="w-full border p-2 rounded bg-white" value={newUser.jornada} onChange={e => setNewUser({...newUser, jornada: e.target.value})}><option value="SI">Requerida (Sí)</option><option value="NO">Omitir (No)</option></select></div>
+                      <button type="submit" className="bg-green-600 text-white font-bold px-6 py-2 rounded">GUARDAR</button>
+                    </form>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-[#f8f9fa] text-[#003366] uppercase text-xs font-bold"><tr><th className="p-4 border-b">Usuario</th><th className="p-4 border-b">Nombre</th><th className="p-4 border-b">Rol</th><th className="p-4 border-b">Jornada</th><th className="p-4 border-b text-right">Acciones</th></tr></thead>
+                      <tbody>
+                        {usuarios.map(u => (
+                          <tr key={u.id} className="border-b hover:bg-gray-50">
+                            <td className="p-4 font-bold">{u.username}</td><td className="p-4">{u.nombre}</td>
+                            <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold text-white ${u.rol === 'Admin' ? 'bg-[#003366]' : 'bg-gray-500'}`}>{u.rol}</span></td>
+                            <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold text-white ${u.jornada === 'SI' ? 'bg-green-500' : 'bg-red-500'}`}>{u.jornada === 'SI' ? 'Requerida' : 'Omitida'}</span></td>
+                            <td className="p-4 text-right flex gap-3 justify-end">
+                              <button onClick={() => handleResetPassword(u.id, u.username)} className="text-blue-600 font-bold hover:underline text-xs">🔑 Reset Clave</button>
+                              <button onClick={() => handleDeleteUser(u.id, u.username)} className="text-red-500 font-bold hover:underline text-xs">❌ Eliminar</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
       </div>
 
-      {/* MODAL FICHA DE INSPECCION */}
+      {/* MODAL FICHA (Reutilizable para Reportes y Mapa) */}
       {modalIns && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
           <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl flex flex-col h-[90vh]">
-            <div className="bg-[#003366] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0">
-              <h2 className="font-bold text-lg">Inspección: {modalIns.id}</h2>
-              <button onClick={() => setModalIns(null)} className="text-3xl leading-none hover:text-red-400">&times;</button>
-            </div>
-            
+            <div className="bg-[#003366] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0"><h2 className="font-bold text-lg">Inspección: {modalIns.id}</h2><button onClick={() => setModalIns(null)} className="text-3xl leading-none hover:text-red-400">&times;</button></div>
             <div className="p-6 overflow-y-auto flex-1 bg-gray-50">
-              {/* DATOS DEL FORMULARIO */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
                 <div className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#003366] block uppercase">Inspector</label><span className="text-sm font-medium">{modalIns.inspector}</span></div>
                 <div className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#003366] block uppercase">Tipo</label><span className="text-sm font-medium">{modalIns.tipo}</span></div>
                 {Object.entries(modalIns.datos_formulario || {}).map(([k, v]:any) => {
                   if(k.includes('fecha_') || k.includes('hora_')) return null;
-                  return (
-                    <div key={k} className="bg-white p-3 rounded shadow-sm border">
-                      <label className="text-[10px] font-bold text-[#003366] block uppercase">{k.replace(/_/g, ' ')}</label>
-                      <span className="text-sm font-medium">{v}</span>
-                    </div>
-                  );
+                  return (<div key={k} className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#003366] block uppercase">{k.replace(/_/g, ' ')}</label><span className="text-sm font-medium">{v}</span></div>);
                 })}
               </div>
-
-              {/* FOTOS */}
               {modalIns.fotos && modalIns.fotos.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="font-bold text-[#003366] border-b pb-2 mb-3">Fotos de Respaldo</h3>
-                  <div className="flex gap-4 overflow-x-auto pb-2">
-                    {modalIns.fotos.map((url:string, i:number) => (
-                      <a key={i} href={url} target="_blank"><img src={url} className="h-32 rounded border hover:scale-105 transition-transform" /></a>
-                    ))}
-                  </div>
-                </div>
+                <div className="mb-6"><h3 className="font-bold text-[#003366] border-b pb-2 mb-3">Fotos</h3><div className="flex gap-4 overflow-x-auto pb-2">{modalIns.fotos.map((url:string, i:number) => (<a key={i} href={url} target="_blank"><img src={url} className="h-32 rounded border hover:scale-105" /></a>))}</div></div>
               )}
-
-              {/* SEGUIMIENTO */}
               <div className="bg-white p-4 rounded border-t-4 border-[#FFCC00] shadow-sm">
                 <h3 className="font-bold text-[#003366] flex items-center gap-2 mb-4">📝 Seguimiento y Acciones</h3>
                 <div className="space-y-2 mb-4 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded border">
                   {followups.filter(f => f.inspection_id === modalIns.id).length === 0 ? <p className="text-sm text-gray-400 italic">Sin acciones registradas.</p> : (
                     followups.filter(f => f.inspection_id === modalIns.id).map(h => (
-                      <div key={h.id} className="border-l-4 border-blue-400 pl-3 py-1 bg-white shadow-sm">
-                        <div className="text-[10px] text-gray-500"><b>{h.usuario}</b> - {new Date(h.created_at).toLocaleString()}</div>
-                        <div className={`text-sm ${h.accion.includes('[CERRADO]') ? 'text-red-600 font-bold' : ''}`}>{h.accion}</div>
-                      </div>
+                      <div key={h.id} className="border-l-4 border-blue-400 pl-3 py-1 bg-white shadow-sm"><div className="text-[10px] text-gray-500"><b>{h.usuario}</b> - {new Date(h.created_at).toLocaleString()}</div><div className={`text-sm ${h.accion.includes('[CERRADO]') ? 'text-red-600 font-bold' : ''}`}>{h.accion}</div></div>
                     ))
                   )}
                 </div>
-
                 {!getInspectionStatus(modalIns.id).includes('CERRADO') && (
                   <div className="space-y-3">
-                    <textarea className="w-full border p-3 rounded text-sm bg-gray-50" rows={2} placeholder="Nuevo comentario de seguimiento..." value={nuevoComentario} onChange={(e) => setNewComentario(e.target.value)}></textarea>
-                    <div className="flex gap-2">
-                      <button onClick={handleAddComentario} className="flex-1 bg-green-600 text-white font-bold p-3 rounded hover:bg-green-700" disabled={loading}>AÑADIR COMENTARIO</button>
-                      <button onClick={handleCerrarTema} className="flex-1 bg-red-600 text-white font-bold p-3 rounded hover:bg-red-700 flex justify-center items-center gap-2" disabled={loading}>🔒 MARCAR COMO CERRADO</button>
-                    </div>
+                    <textarea className="w-full border p-3 rounded text-sm bg-gray-50" rows={2} placeholder="Nuevo comentario..." value={nuevoComentario} onChange={(e) => setNewComentario(e.target.value)}></textarea>
+                    <div className="flex gap-2"><button onClick={handleAddComentario} className="flex-1 bg-green-600 text-white font-bold p-3 rounded hover:bg-green-700" disabled={loading}>AÑADIR COMENTARIO</button><button onClick={handleCerrarTema} className="flex-1 bg-red-600 text-white font-bold p-3 rounded hover:bg-red-700" disabled={loading}>🔒 MARCAR CERRADO</button></div>
                   </div>
                 )}
               </div>
