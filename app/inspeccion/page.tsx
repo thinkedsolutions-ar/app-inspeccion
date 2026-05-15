@@ -73,7 +73,7 @@ export default function InspeccionPage() {
   };
 
   const handleChange = (campo: string, valor: string) => {
-    setFormData(prev: any => ({ ...prev, [campo]: valor }));
+    setFormData((prev: any) => ({ ...prev, [campo]: valor }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
