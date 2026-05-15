@@ -16,7 +16,7 @@ export default function InspeccionPage() {
   const [files, setFiles] = useState<File[]>([]);
 
   // Listas para autocompletado
-  const [listas, setListas] = useState({ conductores: [], unidades: [], servicios: [] });
+  const [listas, setListas] = useState<any>({ conductores: [], unidades: [], servicios: [] });
 
   useEffect(() => {
     const session = localStorage.getItem('buttini_user');
