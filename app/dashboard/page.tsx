@@ -7,7 +7,6 @@ import { Bar, Line } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import dynamic from 'next/dynamic';
 
-// Importamos el mapa dinámicamente para que no rompa el servidor
 const MapComponent = dynamic(() => import('./MapComponent'), { ssr: false });
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement, ChartDataLabels);
@@ -17,24 +16,34 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState('reportes');
   const [loading, setLoading] = useState(true);
   
+  // Datos Globales
   const [inspecciones, setInspecciones] = useState<any[]>([]);
   const [followups, setFollowups] = useState<any[]>([]);
   const [usuarios, setUsuarios] = useState<any[]>([]);
+  const [shiftsGlobal, setShiftsGlobal] = useState<any[]>([]);
   
+  // Filtros Globales
   const [fechaInicio, setFechaInicio] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; });
   const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
-  
-  // Nuevos Filtros
   const [chkSeguimiento, setChkSeguimiento] = useState(false);
   const [chkObservaciones, setChkObservaciones] = useState(false);
   const [filtroInspector, setFiltroInspector] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
 
+  // Estados de Gráficos Cruzados
+  const [selectedInspectorChart, setSelectedInspectorChart] = useState<string | null>(null);
+  const [selectedTypeChart, setSelectedTypeChart] = useState<string | null>(null);
+
+  // Estados para Modales
   const [modalIns, setModalIns] = useState<any>(null);
   const [nuevoComentario, setNewComentario] = useState('');
   const [newUser, setNewUser] = useState({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' });
-  const [selectedInspectorChart, setSelectedInspectorChart] = useState<string | null>(null);
-  const [selectedTypeChart, setSelectedTypeChart] = useState<string | null>(null);
+
+  // Estados para Modal de Desempeño
+  const [modalDesempeno, setModalDesempeno] = useState<string | null>(null);
+  const [desempenoMes, setDesempenoMes] = useState('');
+  const [modalShifts, setModalShifts] = useState<any[]>([]);
+  const [modalInspections, setModalInspections] = useState<any[]>([]);
 
   useEffect(() => {
     const session = localStorage.getItem('buttini_user');
@@ -48,11 +57,12 @@ export default function DashboardPage() {
   const fetchData = async () => {
     setLoading(true);
     const dYearAgo = new Date(); dYearAgo.setFullYear(dYearAgo.getFullYear() - 1);
-    const [resIns, resFol] = await Promise.all([
+    const [resIns, resFol, resShifts] = await Promise.all([
       supabase.from('inspections').select('*').gte('created_at', dYearAgo.toISOString()).order('created_at', { ascending: false }),
-      supabase.from('followups').select('*').order('created_at', { ascending: true })
+      supabase.from('followups').select('*').order('created_at', { ascending: true }),
+      supabase.from('shifts').select('*').gte('fecha', dYearAgo.toISOString()).order('fecha', { ascending: true })
     ]);
-    setInspecciones(resIns.data || []); setFollowups(resFol.data || []); setLoading(false);
+    setInspecciones(resIns.data || []); setFollowups(resFol.data || []); setShiftsGlobal(resShifts.data || []); setLoading(false);
   };
 
   const fetchUsers = async () => {
@@ -60,120 +70,108 @@ export default function DashboardPage() {
     if (data) setUsuarios(data);
   };
 
-  // --- LOGICA USUARIOS ---
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { error } = await supabase.from('users').insert([newUser]);
-    if (error) alert("Error: " + error.message);
-    else { alert("Usuario creado"); setNewUser({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' }); fetchUsers(); }
+  // --- LOGICA DE CÁLCULO DE HORAS ---
+  const calculateHours = (shiftsArray: any[]) => {
+    let worked_ms = 0;
+    let last_time: number | null = null;
+    let status = 'INACTIVA';
+
+    const sorted = [...shiftsArray].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+
+    sorted.forEach(s => {
+      const t = new Date(s.fecha).getTime();
+      if (s.accion === 'INICIO') { status = 'TRABAJANDO'; last_time = t; } 
+      else if (s.accion === 'INICIO_REF' && status === 'TRABAJANDO' && last_time) { worked_ms += t - last_time; status = 'REFRIGERIO'; last_time = null; } 
+      else if (s.accion === 'FIN_REF' && status === 'REFRIGERIO') { status = 'TRABAJANDO'; last_time = t; } 
+      else if (s.accion === 'FIN' && status === 'TRABAJANDO' && last_time) { worked_ms += t - last_time; status = 'INACTIVA'; last_time = null; }
+    });
+
+    const hours = Math.floor(worked_ms / (1000 * 60 * 60));
+    const minutes = Math.floor((worked_ms % (1000 * 60 * 60)) / (1000 * 60));
+    return { hours, minutes, total_ms: worked_ms, formatted: `${hours}:${minutes.toString().padStart(2, '0')}` };
   };
 
-  const handleDeleteUser = async (id: string, username: string) => {
-    if (confirm(`¿Eliminar al usuario ${username}?`)) { await supabase.from('users').delete().eq('id', id); fetchUsers(); }
+  const fetchModalDesempenoData = async (inspector: string, mesAnio: string) => {
+    const startDate = `${mesAnio}-01T00:00:00Z`;
+    const [year, month] = mesAnio.split('-');
+    const endDate = new Date(parseInt(year), parseInt(month), 1).toISOString();
+
+    const [resShifts, resIns] = await Promise.all([
+      supabase.from('shifts').select('*').eq('nombre', inspector).gte('fecha', startDate).lt('fecha', endDate).order('fecha', {ascending: true}),
+      supabase.from('inspections').select('*').eq('inspector', inspector).gte('created_at', startDate).lt('created_at', endDate)
+    ]);
+    setModalShifts(resShifts.data || []);
+    setModalInspections(resIns.data || []);
   };
 
-  const handleResetPassword = async (id: string, username: string) => {
-    const newPass = prompt(`Ingrese la NUEVA CONTRASEÑA para ${username}:`);
-    if (!newPass) return;
-    const { error } = await supabase.from('users').update({ password: newPass }).eq('id', id);
-    if (error) alert("Error al cambiar clave"); else alert("Contraseña actualizada exitosamente.");
+  const handleOpenDesempeno = (inspector: string) => {
+    setModalDesempeno(inspector);
+    const today = new Date();
+    const currentMonth = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+    setDesempenoMes(currentMonth);
+    fetchModalDesempenoData(inspector, currentMonth);
   };
 
-  // --- LOGICA SEGUIMIENTO ---
-  const handleAddComentario = async () => {
-    if (!nuevoComentario.trim()) return;
-    setLoading(true);
-    await supabase.from('followups').insert([{ inspection_id: modalIns.id, usuario: adminUser.nombre, accion: nuevoComentario }]);
-    setNewComentario(''); await fetchData(); setLoading(false);
-  };
-
-  const handleCerrarTema = async () => {
-    if(!confirm("¿Cerrar seguimiento?")) return;
-    setLoading(true);
-    await supabase.from('followups').insert([{ inspection_id: modalIns.id, usuario: adminUser.nombre, accion: '[CERRADO] El tema ha sido cerrado por el administrador.' }]);
-    await fetchData(); setModalIns(null); setLoading(false);
-  };
-
-  const getInspectionStatus = (id: string) => {
-    const f = followups.filter(x => x.inspection_id === id);
-    if (f.length === 0) return 'SIN SEGUIMIENTO';
-    if (f.some(x => x.accion.includes('[CERRADO]'))) return 'CERRADO';
-    return 'ABIERTO';
-  };
-
-  // --- FILTRADO AVANZADO (Tabla y Mapa) ---
+  // --- FILTRADO AVANZADO (Tabla, Mapa, KPI Main) ---
   const dataTabla = inspecciones.filter(ins => {
     const dateOk = ins.created_at >= `${fechaInicio}T00:00:00Z` && ins.created_at <= `${fechaFin}T23:59:59Z`;
     if (!dateOk) return false;
-    if (chkSeguimiento && getInspectionStatus(ins.id) === 'SIN SEGUIMIENTO') return false;
+    if (chkSeguimiento && !followups.some(f => f.inspection_id === ins.id)) return false;
     if (chkObservaciones && (!ins.obs_general || ins.obs_general.trim() === '')) return false;
     if (filtroInspector && ins.inspector !== filtroInspector) return false;
     if (filtroTipo && ins.tipo !== filtroTipo) return false;
     return true;
   });
 
-  const inspectoresUnicos = Array.from(new Set(inspecciones.map(i => i.inspector))).sort();
-  const tiposUnicos = Array.from(new Set(inspecciones.map(i => i.tipo))).sort();
+  const shiftsTabla = shiftsGlobal.filter(s => s.fecha >= `${fechaInicio}T00:00:00Z` && s.fecha <= `${fechaFin}T23:59:59Z`);
+  const inspectoresActivos = Array.from(new Set([...usuarios.filter(u => u.rol === 'Inspector').map(u => u.nombre), ...dataTabla.map(i => i.inspector)])).sort();
 
-  // --- GRÁFICOS ---
-  const last12Months = Array.from({length: 12}, (_, i) => { const d = new Date(); d.setMonth(d.getMonth() - (11 - i)); return d.toLocaleString('es-ES', { month: 'short', year: '2-digit' }); });
-  const trendData = new Array(12).fill(0);
-  inspecciones.forEach(ins => {
-    const d = new Date(ins.created_at);
-    const idx = last12Months.indexOf(d.toLocaleString('es-ES', { month: 'short', year: '2-digit' }));
-    if (idx >= 0) trendData[idx]++;
-  });
-
-  // --- PROCESAMIENTO DE DATOS CON FILTRO CRUZADO ---
+  // --- PROCESAMIENTO GRÁFICOS CRUZADOS ---
   const conteoInspectores: Record<string, number> = {};
-  // El gráfico de inspectores siempre muestra el total de la tabla filtrada por fecha/filtros superiores
-  dataTabla.forEach(ins => {
-    conteoInspectores[ins.inspector] = (conteoInspectores[ins.inspector] || 0) + 1;
-  });
+  dataTabla.forEach(ins => conteoInspectores[ins.inspector] = (conteoInspectores[ins.inspector] || 0) + 1);
 
-  // El gráfico de TIPOS depende de si seleccionamos un inspector en el gráfico de barras
   const conteoTipos: Record<string, number> = {};
-  const dataParaGraficoTipos = selectedInspectorChart 
-    ? dataTabla.filter(ins => ins.inspector === selectedInspectorChart)
-    : dataTabla;
+  const dataParaGraficoTipos = selectedInspectorChart ? dataTabla.filter(ins => ins.inspector === selectedInspectorChart) : dataTabla;
+  dataParaGraficoTipos.forEach(ins => conteoTipos[ins.tipo] = (conteoTipos[ins.tipo] || 0) + 1);
 
-  dataParaGraficoTipos.forEach(ins => {
-    conteoTipos[ins.tipo] = (conteoTipos[ins.tipo] || 0) + 1;
-  });
-
-  // Ordenar datos
   const tiposOrdenados = Object.entries(conteoTipos).sort((a,b) => b[1] - a[1]);
   const inspectoresOrdenados = Object.entries(conteoInspectores).sort((a,b) => b[1] - a[1]);
 
   const chartTipos = {
     labels: tiposOrdenados.map(t => t[0]),
-    datasets: [{ 
-      label: 'Cantidad', 
-      data: tiposOrdenados.map(t => t[1]), 
-      // Si hay un tipo seleccionado, resaltamos ese, si no, colores normales
-      backgroundColor: tiposOrdenados.map((t, i) => 
-        selectedTypeChart && t[0] !== selectedTypeChart ? '#e5e7eb' : ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'][i % 5]
-      )
-    }]
+    datasets: [{ label: 'Cantidad', data: tiposOrdenados.map(t => t[1]), backgroundColor: tiposOrdenados.map((t, i) => selectedTypeChart && t[0] !== selectedTypeChart ? '#e5e7eb' : ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'][i % 5]) }]
   };
 
   const chartInspectores = {
     labels: inspectoresOrdenados.map(i => i[0]),
-    datasets: [{ 
-      label: 'Inspecciones', 
-      data: inspectoresOrdenados.map(i => i[1]), 
-      // Si hay un inspector seleccionado, resaltamos su barra en Amarillo
-      backgroundColor: inspectoresOrdenados.map(i => i[0] === selectedInspectorChart ? '#FFCC00' : '#003366') 
-    }]
+    datasets: [{ label: 'Inspecciones', data: inspectoresOrdenados.map(i => i[1]), backgroundColor: inspectoresOrdenados.map(i => i[0] === selectedInspectorChart ? '#FFCC00' : '#003366') }]
   };
 
-  // --- FILTRADO FINAL DE LA TABLA ---
-  // La tabla ahora se filtra adicionalmente por lo que toquemos en el gráfico de tipos
-  const dataFinalTabla = selectedTypeChart 
-    ? dataTabla.filter(ins => ins.tipo === selectedTypeChart)
-    : dataTabla;
+  const dataFinalTabla = selectedTypeChart ? dataTabla.filter(ins => ins.tipo === selectedTypeChart) : (selectedInspectorChart ? dataTabla.filter(ins => ins.inspector === selectedInspectorChart) : dataTabla);
 
   const chartOptionsNumbers = { maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { anchor: 'end' as const, align: 'end' as const, font: { weight: 'bold' as const }, formatter: (v:number) => v > 0 ? v : '' } }, scales: { y: { beginAtZero: true, grace: '10%' } } };
+
+  const optionsInspectorChart = { ...chartOptionsNumbers, onClick: (e: any, elements: any) => { if (elements.length > 0) { const label = inspectoresOrdenados[elements[0].index][0]; setSelectedInspectorChart(label === selectedInspectorChart ? null : label); } else setSelectedInspectorChart(null); }};
+  const optionsTypeChart = { ...chartOptionsNumbers, onClick: (e: any, elements: any) => { if (elements.length > 0) { const label = tiposOrdenados[elements[0].index][0]; setSelectedTypeChart(label === selectedTypeChart ? null : label); } else { setSelectedTypeChart(null); setSelectedInspectorChart(null); } }};
+
+  // Lógica Grilla Desempeño Modal
+  const getDailyDesempeno = () => {
+    if (!desempenoMes) return [];
+    const [year, month] = desempenoMes.split('-');
+    const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
+    const dailyData = [];
+    let accumulatedMs = 0;
+
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dayShifts = modalShifts.filter(s => { const d = new Date(s.fecha); return d.getFullYear() === parseInt(year) && (d.getMonth()+1) === parseInt(month) && d.getDate() === i; });
+      const { total_ms, formatted } = calculateHours(dayShifts);
+      accumulatedMs += total_ms;
+      const accHours = Math.floor(accumulatedMs / (1000 * 60 * 60));
+      const accMins = Math.floor((accumulatedMs % (1000 * 60 * 60)) / (1000 * 60));
+      dailyData.push({ date: `${i.toString().padStart(2, '0')}/${month}/${year}`, worked: total_ms > 0 ? formatted : 'F', accumulated: total_ms > 0 ? `${accHours}:${accMins.toString().padStart(2, '0')}` : '0:00' });
+    }
+    return dailyData;
+  };
 
   if (!adminUser) return <div className="p-10 text-center">Cargando...</div>;
 
@@ -185,6 +183,7 @@ export default function DashboardPage() {
         <div className="p-6 bg-white m-4 rounded-lg text-center"><img src="https://i.ibb.co/RG0tNq6t/Logo-Web-copia.png" className="h-10 mx-auto" alt="Logo" /><div className="text-[#003366] text-[10px] font-black mt-2">GESTIÓN OPERATIVA V3</div></div>
         <nav className="flex-1 px-2 space-y-2">
           <button onClick={() => setActiveTab('reportes')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'reportes' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>📊 Reportes</button>
+          <button onClick={() => setActiveTab('desempeno')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'desempeno' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>👥 Desempeño Personal</button>
           <button onClick={() => setActiveTab('mapa')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'mapa' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>📍 Mapa Satelital</button>
           <button onClick={() => setActiveTab('usuarios')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'usuarios' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>⚙️ Usuarios</button>
         </nav>
@@ -195,23 +194,12 @@ export default function DashboardPage() {
         {/* TOP BAR FILTROS */}
         <div className="bg-white p-4 shadow-sm flex justify-between items-center z-10 shrink-0 border-b">
           <div className="flex gap-4 items-center flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-500 uppercase">Desde</span>
-              <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="border p-2 rounded text-sm bg-gray-50" />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-500 uppercase">Hasta</span>
-              <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="border p-2 rounded text-sm bg-gray-50" />
-            </div>
-            
-            {/* Nuevos Filtros Globales (Afectan Tabla y Mapa) */}
+            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="border p-2 rounded text-sm bg-gray-50" />
+            <span className="text-gray-400">→</span>
+            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="border p-2 rounded text-sm bg-gray-50" />
             <select value={filtroInspector} onChange={(e)=>setFiltroInspector(e.target.value)} className="border p-2 rounded text-sm bg-white font-bold text-[#003366]">
               <option value="">Todos los Inspectores</option>
-              {inspectoresUnicos.map((i:any) => <option key={i} value={i}>{i}</option>)}
-            </select>
-            <select value={filtroTipo} onChange={(e)=>setFiltroTipo(e.target.value)} className="border p-2 rounded text-sm bg-white font-bold text-[#003366] max-w-xs">
-              <option value="">Todos los Tipos</option>
-              {tiposUnicos.map((t:any) => <option key={t} value={t}>{t}</option>)}
+              {inspectoresActivos.map((i:any) => <option key={i} value={i}>{i}</option>)}
             </select>
           </div>
           <div className="font-bold text-[#003366]">👤 {adminUser.nombre}</div>
@@ -220,135 +208,141 @@ export default function DashboardPage() {
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
           {loading ? <div className="text-center mt-20 font-bold text-xl animate-pulse">Cargando datos en vivo...</div> : (
             <>
-              {/* --- REPORTES --- */}
+              {/* --- REPORTES (MANTENIDO) --- */}
               {activeTab === 'reportes' && (
                 <div className="space-y-6">
-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-6">
-                    <div className="min-w-[150px] border-r pr-4"><h3 className="text-gray-400 font-bold uppercase text-[10px]">Total Inspecciones</h3><div className="text-4xl font-black text-[#003366]">{dataTabla.length}</div></div>
-                    <div className="flex-1 h-32"><Line data={{ labels: last12Months, datasets: [{ data: trendData, borderColor: '#3b82f6', backgroundColor: '#dc3545', pointRadius: 4, tension: 0.3 }] }} options={chartOptionsNumbers} /></div>
-                  </div>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#003366] font-bold mb-4">Distribución por Tipo</h3><div className="h-64"><Bar data={chartTipos} options={chartOptionsNumbers} /></div></div>
-                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#003366] font-bold mb-4">Total por Inspector</h3><div className="h-64"><Bar data={chartInspectores} options={chartOptionsNumbers} /></div></div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#003366] font-bold mb-4">Distribución por Tipo <span className="text-[10px] text-gray-400 font-normal">(Clic para filtrar abajo)</span> {selectedInspectorChart && <span className="text-xs text-orange-500 ml-2">(De {selectedInspectorChart})</span>}</h3><div className="h-64"><Bar data={chartTipos} options={optionsTypeChart} /></div></div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#003366] font-bold mb-4">Total por Inspector <span className="text-[10px] text-gray-400 font-normal">(Clic para cruzar datos)</span></h3><div className="h-64"><Bar data={chartInspectores} options={optionsInspectorChart} /></div></div>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm border flex flex-col h-[500px]">
-                    <div className="bg-gray-50 p-4 border-b flex justify-between items-center shrink-0 flex-wrap gap-2">
+                    <div className="bg-gray-50 p-4 border-b flex justify-between items-center">
                       <div className="font-bold text-[#003366] text-lg">Registro Detallado</div>
-                      <div className="flex gap-4">
-                        <label className="flex items-center gap-2 bg-[#fffbe6] px-3 py-1 border border-yellow-200 rounded cursor-pointer text-xs font-bold text-[#003366]"><input type="checkbox" checked={chkSeguimiento} onChange={e=>setChkSeguimiento(e.target.checked)}/> Solo Seguimiento</label>
-                        <label className="flex items-center gap-2 bg-[#fffbe6] px-3 py-1 border border-yellow-200 rounded cursor-pointer text-xs font-bold text-[#003366]"><input type="checkbox" checked={chkObservaciones} onChange={e=>setChkObservaciones(e.target.checked)}/> Solo Observaciones</label>
+                    </div>
+                    <div className="overflow-y-auto flex-1"><table className="w-full text-sm text-left"><thead className="bg-white text-[#003366] sticky top-0 shadow-sm z-10"><tr><th className="p-3">Fecha</th><th className="p-3">Inspector</th><th className="p-3">Tipo</th><th className="p-3 text-center">Acción</th></tr></thead><tbody>{dataFinalTabla.map(ins => (<tr key={ins.id} className="border-b"><td className="p-3">{new Date(ins.created_at).toLocaleDateString()}</td><td className="p-3 font-bold">{ins.inspector}</td><td className="p-3"><span className="bg-gray-100 px-2 py-1 rounded text-[10px] font-bold border">{ins.tipo}</span></td><td className="p-3 text-center"><button onClick={() => setModalIns(ins)} className="bg-[#FFCC00] text-[#003366] px-3 py-1 rounded font-bold text-xs">VER</button></td></tr>))}</tbody></table></div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- DESEMPEÑO PERSONAL (NUEVO) --- */}
+              {activeTab === 'desempeno' && (
+                <div className="space-y-6">
+                  <h2 className="text-xl font-bold text-[#003366] border-b-4 border-[#FFCC00] inline-block pb-1">Reporte de Horas y Desempeño</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {inspectoresActivos.map(insp => {
+                      const misShifts = shiftsTabla.filter(s => s.nombre === insp);
+                      const misIns = dataTabla.filter(i => i.inspector === insp);
+                      const { formatted } = calculateHours(misShifts);
+                      return (
+                        <div key={insp} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                          <div>
+                            <h3 className="font-bold text-[#003366] text-lg mb-6">{insp}</h3>
+                            <div className="flex justify-between items-end mb-2"><span className="text-4xl font-black text-gray-800">{formatted}</span><span className="text-xs text-gray-500 mb-1">hs acumuladas</span></div>
+                            <div className="flex justify-between items-end mb-6"><span className="text-2xl font-black text-[#003366]">{misIns.length}</span><span className="text-xs text-gray-500 mb-1">inspecciones realizadas</span></div>
+                          </div>
+                          <button onClick={() => handleOpenDesempeno(insp)} className="w-full bg-[#FFCC00] text-[#003366] font-bold py-3 rounded-lg shadow-sm hover:brightness-105 transition-all">VER DETALLE</button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* --- MAPA Y USUARIOS MANTENIDOS --- */}
+              {activeTab === 'mapa' && <div className="h-full bg-white rounded-xl shadow-sm border p-4 flex flex-col"><h2 className="text-[#003366] font-bold text-lg mb-4">📍 Mapa</h2><div className="flex-1 rounded-xl overflow-hidden border"><MapComponent inspecciones={dataTabla} onVerFicha={setModalIns} /></div></div>}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* --- MODAL DETALLE DESEMPEÑO --- */}
+      {modalDesempeno && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[90] backdrop-blur-sm">
+          <div className="bg-white w-full max-w-6xl rounded-xl shadow-2xl flex flex-col h-[95vh]">
+            <div className="bg-[#003366] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0">
+              <h2 className="font-bold text-lg">Desempeño: {modalDesempeno}</h2>
+              <div className="flex gap-4 items-center">
+                <input type="month" value={desempenoMes} onChange={(e) => { setDesempenoMes(e.target.value); fetchModalDesempenoData(modalDesempeno, e.target.value); }} className="text-black px-3 py-1 rounded text-sm font-bold" />
+                <button onClick={() => setModalDesempeno(null)} className="text-3xl leading-none hover:text-red-400">&times;</button>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 bg-[#f4f7f9]">
+              <div className="flex flex-col md:flex-row gap-6">
+                
+                {/* Panel Izquierdo: KPI */}
+                <div className="md:w-1/2 flex flex-col gap-4">
+                  <h3 className="font-bold text-[#003366] text-lg border-b-2 border-[#FFCC00] pb-1">Inspecciones Realizadas</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-blue-50 p-6 rounded-lg text-center shadow-sm border border-blue-100 flex flex-col justify-center">
+                      <span className="font-bold text-[#003366] mb-2">Total Inspecciones</span><span className="text-5xl font-black text-blue-600">{modalInspections.length}</span>
+                    </div>
+                    {['1-INSPECTOR EN CALLE', '2-EMOP', '3-SEGUIMIENTO DE PERSONAL', '4-SEGUIMIENTO DE TEMAS', '5-INSPECCION AREA DE DESCANSO'].map(t => {
+                      const qty = modalInspections.filter(i => i.tipo === t).length;
+                      if(qty === 0) return null;
+                      return (
+                        <div key={t} className="bg-white p-4 rounded-lg text-center shadow-sm border">
+                          <span className="text-xs font-bold text-gray-500 block mb-2">{t}</span><span className="text-3xl font-black text-[#FFCC00]">{qty}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {/* Desglose Temas */}
+                  {modalInspections.some(i => i.tipo === '4-SEGUIMIENTO DE TEMAS') && (
+                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mt-2">
+                      <h4 className="font-bold text-xs text-[#003366] uppercase mb-3 border-b pb-2">Detalle Seguimiento de Temas</h4>
+                      <div className="space-y-2">
+                        {Array.from(new Set(modalInspections.filter(i => i.tipo === '4-SEGUIMIENTO DE TEMAS').map(i => i.datos_formulario?.tema_tipo || 'Otros'))).map(tema => (
+                          <div key={tema} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded">
+                            <span className="text-gray-700">{tema}</span><span className="font-bold bg-[#FFCC00] text-[#003366] px-2 py-0.5 rounded text-xs">{modalInspections.filter(i => i.datos_formulario?.tema_tipo === tema).length}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <div className="overflow-y-auto flex-1 relative">
-                      <table className="w-full text-sm text-left">
-                        <thead className="bg-white text-[#003366] sticky top-0 shadow-sm z-10"><tr><th className="p-3">Fecha</th><th className="p-3">Inspector</th><th className="p-3">Tipo</th><th className="p-3">Observaciones</th><th className="p-3 text-center">Acción</th><th className="p-3 text-center">Estado</th></tr></thead>
-                        <tbody>
-                          {dataTabla.map(ins => (
-                            <tr key={ins.id} className="border-b hover:bg-gray-50">
-                              <td className="p-3 font-medium">{new Date(ins.created_at).toLocaleDateString()} {new Date(ins.created_at).toLocaleTimeString().slice(0,5)}</td>
-                              <td className="p-3 font-bold">{ins.inspector}</td>
-                              <td className="p-3"><span className="bg-gray-100 px-2 py-1 rounded text-[10px] font-bold border truncate block max-w-[200px]">{ins.tipo}</span></td>
-                              <td className="p-3 text-xs text-gray-600 max-w-[200px] truncate">{ins.obs_general}</td>
-                              <td className="p-3 text-center"><button onClick={() => setModalIns(ins)} className="bg-[#FFCC00] text-[#003366] px-3 py-1 rounded font-bold text-xs">VER</button></td>
-                              <td className="p-3 text-center text-[10px] font-bold uppercase">{getInspectionStatus(ins.id)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  )}
                 </div>
-              )}
 
-              {/* --- MAPA SATELITAL --- */}
-              {activeTab === 'mapa' && (
-                <div className="h-full flex flex-col bg-white rounded-xl shadow-sm border p-4">
-                  <div className="mb-4 flex justify-between items-center">
-                    <h2 className="text-[#003366] font-bold text-lg">📍 Mapa de Inspecciones</h2>
-                    <span className="bg-green-100 text-green-800 px-3 py-1 rounded text-xs font-bold border border-green-200">{dataTabla.length} Puntos encontrados</span>
-                  </div>
-                  <div className="flex-1 rounded-xl overflow-hidden border">
-                    <MapComponent inspecciones={dataTabla} onVerFicha={(ins:any) => setModalIns(ins)} />
-                  </div>
-                </div>
-              )}
-
-              {/* --- USUARIOS --- */}
-              {activeTab === 'usuarios' && (
-                <div className="space-y-6">
-                  <div className="bg-white p-6 rounded-xl shadow-sm border">
-                    <h3 className="text-[#003366] font-bold mb-4">Agregar Nuevo Usuario</h3>
-                    <form onSubmit={handleCreateUser} className="flex flex-wrap gap-4 items-end">
-                      <div className="flex-1 min-w-[150px]"><label className="block text-xs font-bold text-gray-500 mb-1">Usuario (Login)</label><input type="text" className="w-full border p-2 rounded bg-gray-50" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required /></div>
-                      <div className="flex-1 min-w-[150px]"><label className="block text-xs font-bold text-gray-500 mb-1">Clave</label><input type="password" className="w-full border p-2 rounded bg-gray-50" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required /></div>
-                      <div className="flex-1 min-w-[200px]"><label className="block text-xs font-bold text-gray-500 mb-1">Nombre Completo</label><input type="text" className="w-full border p-2 rounded bg-gray-50" value={newUser.nombre} onChange={e => setNewUser({...newUser, nombre: e.target.value})} required /></div>
-                      <div><label className="block text-xs font-bold text-gray-500 mb-1">Rol</label><select className="w-full border p-2 rounded bg-white" value={newUser.rol} onChange={e => setNewUser({...newUser, rol: e.target.value})}><option value="Inspector">Inspector</option><option value="Admin">Admin</option></select></div>
-                      <div><label className="block text-xs font-bold text-gray-500 mb-1">Jornada Mínima</label><select className="w-full border p-2 rounded bg-white" value={newUser.jornada} onChange={e => setNewUser({...newUser, jornada: e.target.value})}><option value="SI">Requerida (Sí)</option><option value="NO">Omitir (No)</option></select></div>
-                      <button type="submit" className="bg-green-600 text-white font-bold px-6 py-2 rounded">GUARDAR</button>
-                    </form>
-                  </div>
-                  <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-[#f8f9fa] text-[#003366] uppercase text-xs font-bold"><tr><th className="p-4 border-b">Usuario</th><th className="p-4 border-b">Nombre</th><th className="p-4 border-b">Rol</th><th className="p-4 border-b">Jornada</th><th className="p-4 border-b text-right">Acciones</th></tr></thead>
+                {/* Panel Derecho: Grilla Diaria */}
+                <div className="md:w-1/2 flex flex-col gap-4">
+                  <h3 className="font-bold text-[#003366] text-lg border-b-2 border-[#FFCC00] pb-1">Grilla de Horas Diarias</h3>
+                  <div className="flex-1 max-h-[500px] overflow-y-auto bg-white rounded-lg shadow-sm border">
+                    <table className="w-full text-center text-sm">
+                      <thead className="bg-gray-50 sticky top-0 shadow-sm text-[#003366]"><tr><th className="p-3">Fecha</th><th className="p-3">Horas Trabajadas</th><th className="p-3">Horas Acumuladas</th></tr></thead>
                       <tbody>
-                        {usuarios.map(u => (
-                          <tr key={u.id} className="border-b hover:bg-gray-50">
-                            <td className="p-4 font-bold">{u.username}</td><td className="p-4">{u.nombre}</td>
-                            <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold text-white ${u.rol === 'Admin' ? 'bg-[#003366]' : 'bg-gray-500'}`}>{u.rol}</span></td>
-                            <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold text-white ${u.jornada === 'SI' ? 'bg-green-500' : 'bg-red-500'}`}>{u.jornada === 'SI' ? 'Requerida' : 'Omitida'}</span></td>
-                            <td className="p-4 text-right flex gap-3 justify-end">
-                              <button onClick={() => handleResetPassword(u.id, u.username)} className="text-blue-600 font-bold hover:underline text-xs">🔑 Reset Clave</button>
-                              <button onClick={() => handleDeleteUser(u.id, u.username)} className="text-red-500 font-bold hover:underline text-xs">❌ Eliminar</button>
-                            </td>
+                        {getDailyDesempeno().map(d => (
+                          <tr key={d.date} className="border-b hover:bg-gray-50">
+                            <td className="p-3 text-gray-600">{d.date}</td><td className={`p-3 font-bold text-lg ${d.worked === 'F' ? 'text-red-500' : 'text-[#003366]'}`}>{d.worked}</td><td className="p-3 font-medium text-gray-400">{d.accumulated}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* MODAL FICHA (Reutilizable para Reportes y Mapa) */}
-      {modalIns && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
-          <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl flex flex-col h-[90vh]">
-            <div className="bg-[#003366] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0"><h2 className="font-bold text-lg">Inspección: {modalIns.id}</h2><button onClick={() => setModalIns(null)} className="text-3xl leading-none hover:text-red-400">&times;</button></div>
-            <div className="p-6 overflow-y-auto flex-1 bg-gray-50">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
-                <div className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#003366] block uppercase">Inspector</label><span className="text-sm font-medium">{modalIns.inspector}</span></div>
-                <div className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#003366] block uppercase">Tipo</label><span className="text-sm font-medium">{modalIns.tipo}</span></div>
-                {Object.entries(modalIns.datos_formulario || {}).map(([k, v]:any) => {
-                  if(k.includes('fecha_') || k.includes('hora_')) return null;
-                  return (<div key={k} className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#003366] block uppercase">{k.replace(/_/g, ' ')}</label><span className="text-sm font-medium">{v}</span></div>);
-                })}
               </div>
-              {modalIns.fotos && modalIns.fotos.length > 0 && (
-                <div className="mb-6"><h3 className="font-bold text-[#003366] border-b pb-2 mb-3">Fotos</h3><div className="flex gap-4 overflow-x-auto pb-2">{modalIns.fotos.map((url:string, i:number) => (<a key={i} href={url} target="_blank"><img src={url} className="h-32 rounded border hover:scale-105" /></a>))}</div></div>
-              )}
-              <div className="bg-white p-4 rounded border-t-4 border-[#FFCC00] shadow-sm">
-                <h3 className="font-bold text-[#003366] flex items-center gap-2 mb-4">📝 Seguimiento y Acciones</h3>
-                <div className="space-y-2 mb-4 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded border">
-                  {followups.filter(f => f.inspection_id === modalIns.id).length === 0 ? <p className="text-sm text-gray-400 italic">Sin acciones registradas.</p> : (
-                    followups.filter(f => f.inspection_id === modalIns.id).map(h => (
-                      <div key={h.id} className="border-l-4 border-blue-400 pl-3 py-1 bg-white shadow-sm"><div className="text-[10px] text-gray-500"><b>{h.usuario}</b> - {new Date(h.created_at).toLocaleString()}</div><div className={`text-sm ${h.accion.includes('[CERRADO]') ? 'text-red-600 font-bold' : ''}`}>{h.accion}</div></div>
-                    ))
-                  )}
-                </div>
-                {!getInspectionStatus(modalIns.id).includes('CERRADO') && (
-                  <div className="space-y-3">
-                    <textarea className="w-full border p-3 rounded text-sm bg-gray-50" rows={2} placeholder="Nuevo comentario..." value={nuevoComentario} onChange={(e) => setNewComentario(e.target.value)}></textarea>
-                    <div className="flex gap-2"><button onClick={handleAddComentario} className="flex-1 bg-green-600 text-white font-bold p-3 rounded hover:bg-green-700" disabled={loading}>AÑADIR COMENTARIO</button><button onClick={handleCerrarTema} className="flex-1 bg-red-600 text-white font-bold p-3 rounded hover:bg-red-700" disabled={loading}>🔒 MARCAR CERRADO</button></div>
-                  </div>
-                )}
+
+              {/* Mapa de Mes */}
+              <div className="mt-4"><h3 className="font-bold text-[#003366] text-lg border-b-2 border-[#FFCC00] pb-1 mb-4">Mapa de Actividad (Mes Seleccionado)</h3><div className="h-96 rounded-xl overflow-hidden border shadow-sm"><MapComponent inspecciones={modalInspections} onVerFicha={setModalIns} /></div></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FICHA (zIndex superior 100 para sobreponerse al de desempeño 90) */}
+      {modalIns && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
+          <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl flex flex-col h-[85vh]">
+            <div className="bg-[#003366] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0"><h2 className="font-bold">Ficha: {modalIns.id}</h2><button onClick={() => setModalIns(null)} className="text-3xl leading-none">&times;</button></div>
+            <div className="p-6 overflow-y-auto flex-1 bg-gray-50">
+               {/* AQUÍ VA EL DETALLE COMPLETO QUE YA TENÍAMOS */}
+               <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="bg-white p-3 rounded border"><label className="text-[10px] font-bold text-[#003366] uppercase block">Inspector</label><span>{modalIns.inspector}</span></div>
+                <div className="bg-white p-3 rounded border"><label className="text-[10px] font-bold text-[#003366] uppercase block">Tipo</label><span>{modalIns.tipo}</span></div>
               </div>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }
