@@ -7,7 +7,6 @@ import { Bar, Line } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import dynamic from 'next/dynamic';
 
-// Importamos el mapa dinámicamente para que no rompa el servidor
 const MapComponent = dynamic(() => import('./MapComponent'), { ssr: false });
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement, ChartDataLabels);
@@ -20,11 +19,11 @@ export default function DashboardPage() {
   const [inspecciones, setInspecciones] = useState<any[]>([]);
   const [followups, setFollowups] = useState<any[]>([]);
   const [usuarios, setUsuarios] = useState<any[]>([]);
+  const [shifts, setShifts] = useState<any[]>([]); // NUEVO: Para calcular horas
   
   const [fechaInicio, setFechaInicio] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; });
   const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
   
-  // Nuevos Filtros
   const [chkSeguimiento, setChkSeguimiento] = useState(false);
   const [chkObservaciones, setChkObservaciones] = useState(false);
   const [filtroInspector, setFiltroInspector] = useState('');
@@ -33,8 +32,15 @@ export default function DashboardPage() {
   const [modalIns, setModalIns] = useState<any>(null);
   const [nuevoComentario, setNewComentario] = useState('');
   const [newUser, setNewUser] = useState({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' });
+
   const [selectedInspectorChart, setSelectedInspectorChart] = useState<string | null>(null);
   const [selectedTypeChart, setSelectedTypeChart] = useState<string | null>(null);
+
+  // NUEVOS ESTADOS: Desempeño
+  const [modalDesempeno, setModalDesempeno] = useState<string | null>(null);
+  const [mesDesempeno, setMesDesempeno] = useState(() => {
+    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   useEffect(() => {
     const session = localStorage.getItem('buttini_user');
@@ -45,14 +51,16 @@ export default function DashboardPage() {
     fetchData(); fetchUsers();
   },[]);
 
+  // SE MODIFICÓ ESTA FUNCIÓN: Se agregó supabase.from('shifts')...
   const fetchData = async () => {
     setLoading(true);
     const dYearAgo = new Date(); dYearAgo.setFullYear(dYearAgo.getFullYear() - 1);
-    const [resIns, resFol] = await Promise.all([
+    const [resIns, resFol, resShifts] = await Promise.all([
       supabase.from('inspections').select('*').gte('created_at', dYearAgo.toISOString()).order('created_at', { ascending: false }),
-      supabase.from('followups').select('*').order('created_at', { ascending: true })
+      supabase.from('followups').select('*').order('created_at', { ascending: true }),
+      supabase.from('shifts').select('*').gte('fecha', dYearAgo.toISOString()).order('fecha', { ascending: true })
     ]);
-    setInspecciones(resIns.data || []); setFollowups(resFol.data || []); setLoading(false);
+    setInspecciones(resIns.data || []); setFollowups(resFol.data || []); setShifts(resShifts.data || []); setLoading(false);
   };
 
   const fetchUsers = async () => {
@@ -60,7 +68,6 @@ export default function DashboardPage() {
     if (data) setUsuarios(data);
   };
 
-  // --- LOGICA USUARIOS ---
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     const { error } = await supabase.from('users').insert([newUser]);
@@ -79,7 +86,6 @@ export default function DashboardPage() {
     if (error) alert("Error al cambiar clave"); else alert("Contraseña actualizada exitosamente.");
   };
 
-  // --- LOGICA SEGUIMIENTO ---
   const handleAddComentario = async () => {
     if (!nuevoComentario.trim()) return;
     setLoading(true);
@@ -101,7 +107,6 @@ export default function DashboardPage() {
     return 'ABIERTO';
   };
 
-  // --- FILTRADO AVANZADO (Tabla y Mapa) ---
   const dataTabla = inspecciones.filter(ins => {
     const dateOk = ins.created_at >= `${fechaInicio}T00:00:00Z` && ins.created_at <= `${fechaFin}T23:59:59Z`;
     if (!dateOk) return false;
@@ -115,7 +120,6 @@ export default function DashboardPage() {
   const inspectoresUnicos = Array.from(new Set(inspecciones.map(i => i.inspector))).sort();
   const tiposUnicos = Array.from(new Set(inspecciones.map(i => i.tipo))).sort();
 
-  // --- GRÁFICOS ---
   const last12Months = Array.from({length: 12}, (_, i) => { const d = new Date(); d.setMonth(d.getMonth() - (11 - i)); return d.toLocaleString('es-ES', { month: 'short', year: '2-digit' }); });
   const trendData = new Array(12).fill(0);
   inspecciones.forEach(ins => {
@@ -124,56 +128,132 @@ export default function DashboardPage() {
     if (idx >= 0) trendData[idx]++;
   });
 
-  // --- PROCESAMIENTO DE DATOS CON FILTRO CRUZADO ---
   const conteoInspectores: Record<string, number> = {};
-  // El gráfico de inspectores siempre muestra el total de la tabla filtrada por fecha/filtros superiores
-  dataTabla.forEach(ins => {
-    conteoInspectores[ins.inspector] = (conteoInspectores[ins.inspector] || 0) + 1;
-  });
+  dataTabla.forEach(ins => { conteoInspectores[ins.inspector] = (conteoInspectores[ins.inspector] || 0) + 1; });
 
-  // El gráfico de TIPOS depende de si seleccionamos un inspector en el gráfico de barras
   const conteoTipos: Record<string, number> = {};
-  const dataParaGraficoTipos = selectedInspectorChart 
-    ? dataTabla.filter(ins => ins.inspector === selectedInspectorChart)
-    : dataTabla;
+  const dataParaGraficoTipos = selectedInspectorChart ? dataTabla.filter(ins => ins.inspector === selectedInspectorChart) : dataTabla;
+  dataParaGraficoTipos.forEach(ins => { conteoTipos[ins.tipo] = (conteoTipos[ins.tipo] || 0) + 1; });
 
-  dataParaGraficoTipos.forEach(ins => {
-    conteoTipos[ins.tipo] = (conteoTipos[ins.tipo] || 0) + 1;
-  });
-
-  // Ordenar datos
   const tiposOrdenados = Object.entries(conteoTipos).sort((a,b) => b[1] - a[1]);
   const inspectoresOrdenados = Object.entries(conteoInspectores).sort((a,b) => b[1] - a[1]);
 
   const chartTipos = {
     labels: tiposOrdenados.map(t => t[0]),
-    datasets: [{ 
-      label: 'Cantidad', 
-      data: tiposOrdenados.map(t => t[1]), 
-      // Si hay un tipo seleccionado, resaltamos ese, si no, colores normales
-      backgroundColor: tiposOrdenados.map((t, i) => 
-        selectedTypeChart && t[0] !== selectedTypeChart ? '#e5e7eb' : ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'][i % 5]
-      )
-    }]
+    datasets: [{ label: 'Cantidad', data: tiposOrdenados.map(t => t[1]), backgroundColor: tiposOrdenados.map((t, i) => selectedTypeChart && t[0] !== selectedTypeChart ? '#e5e7eb' : ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'][i % 5]) }]
   };
 
   const chartInspectores = {
     labels: inspectoresOrdenados.map(i => i[0]),
-    datasets: [{ 
-      label: 'Inspecciones', 
-      data: inspectoresOrdenados.map(i => i[1]), 
-      // Si hay un inspector seleccionado, resaltamos su barra en Amarillo
-      backgroundColor: inspectoresOrdenados.map(i => i[0] === selectedInspectorChart ? '#FFCC00' : '#003366') 
-    }]
+    datasets: [{ label: 'Inspecciones', data: inspectoresOrdenados.map(i => i[1]), backgroundColor: inspectoresOrdenados.map(i => i[0] === selectedInspectorChart ? '#FFCC00' : '#003366') }]
   };
 
-  // --- FILTRADO FINAL DE LA TABLA ---
-  // La tabla ahora se filtra adicionalmente por lo que toquemos en el gráfico de tipos
-  const dataFinalTabla = selectedTypeChart 
-    ? dataTabla.filter(ins => ins.tipo === selectedTypeChart)
-    : dataTabla;
+  const types = Array.from(new Set(dataTabla.map(i => i.tipo)));
+  const inspectors = Array.from(new Set(dataTabla.map(i => i.inspector)));
+  const palette = ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'];
+  const chartStacked = {
+    labels: inspectors,
+    datasets: types.map((type, i) => ({ label: type, backgroundColor: palette[i % palette.length], data: inspectors.map(insp => dataTabla.filter(ins => ins.inspector === insp && ins.tipo === type).length) }))
+  };
 
   const chartOptionsNumbers = { maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { anchor: 'end' as const, align: 'end' as const, font: { weight: 'bold' as const }, formatter: (v:number) => v > 0 ? v : '' } }, scales: { y: { beginAtZero: true, grace: '10%' } } };
+
+  const optionsInspectorChart = {
+    ...chartOptionsNumbers,
+    onClick: (e: any, elements: any) => {
+      if (elements.length > 0) {
+        const label = inspectoresOrdenados[elements[0].index][0];
+        setSelectedInspectorChart(label === selectedInspectorChart ? null : label);
+      } else setSelectedInspectorChart(null);
+    }
+  };
+
+  const optionsTypeChart = {
+    ...chartOptionsNumbers,
+    onClick: (e: any, elements: any) => {
+      if (elements.length > 0) {
+        const label = tiposOrdenados[elements[0].index][0];
+        setSelectedTypeChart(label === selectedTypeChart ? null : label);
+      } else { setSelectedTypeChart(null); setSelectedInspectorChart(null); }
+    }
+  };
+
+  const dataFinalTabla = selectedTypeChart ? dataTabla.filter(ins => ins.tipo === selectedTypeChart) : dataTabla;
+
+  // --- LÓGICA DE HORAS TRABAJADAS (DESEMPEÑO) ---
+  const getHorasRango = (nombreInsp: string, inicioYMD: string, finYMD: string) => {
+    const sFiltrados = shifts.filter(s => s.nombre === nombreInsp && s.fecha.substring(0,10) >= inicioYMD && s.fecha.substring(0,10) <= finYMD);
+    const iFiltradas = inspecciones.filter(i => i.inspector === nombreInsp && i.created_at.substring(0,10) >= inicioYMD && i.created_at.substring(0,10) <= finYMD);
+    
+    const dias: any = {};
+    sFiltrados.forEach(s => {
+      const dKey = s.fecha.substring(0, 10);
+      if (!dias[dKey]) dias[dKey] = { start: null, end: null, refStart: null, refEnd: null };
+      const dObj = new Date(s.fecha);
+      if (s.accion === 'INICIO') dias[dKey].start = dObj;
+      if (s.accion === 'FIN') dias[dKey].end = dObj;
+      if (s.accion === 'INICIO_REF') dias[dKey].refStart = dObj;
+      if (s.accion === 'FIN_REF') dias[dKey].refEnd = dObj;
+    });
+
+    let totalMs = 0;
+    for (const dKey in dias) {
+      const d = dias[dKey];
+      if (d.start) {
+        let end = d.end;
+        if (!end) {
+          const hoyIns = iFiltradas.filter(i => i.created_at.substring(0, 10) === dKey);
+          if (hoyIns.length > 0) end = new Date(Math.max(...hoyIns.map(i => new Date(i.created_at).getTime())));
+          else end = d.start;
+        }
+        let dayMs = end.getTime() - d.start.getTime();
+        if (d.refStart && d.refEnd) dayMs -= (d.refEnd.getTime() - d.refStart.getTime());
+        if (dayMs > 0) totalMs += dayMs;
+      }
+    }
+    const h = Math.floor(totalMs / 3600000);
+    const m = Math.floor((totalMs % 3600000) / 60000);
+    return { ms: totalMs, text: `${h}:${m.toString().padStart(2, '0')}` };
+  };
+
+  // --- LÓGICA MODAL DESEMPEÑO (Mes Específico) ---
+  const [desempenoDatos, setDesempenoDatos] = useState<any>({ grid: [], totalMs: 0, kpis: {}, temas: {}, mapaIns: [] });
+
+  useEffect(() => {
+    if (modalDesempeno) {
+      const parts = mesDesempeno.split('-');
+      const y = parseInt(parts[0]); const m = parseInt(parts[1]) - 1;
+      const firstDay = new Date(y, m, 1); const lastDay = new Date(y, m + 1, 0);
+      
+      const grid = [];
+      let msAcumulado = 0;
+      
+      for (let day = 1; day <= lastDay.getDate(); day++) {
+        const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const calc = getHorasRango(modalDesempeno, dateStr, dateStr);
+        msAcumulado += calc.ms;
+        const accH = Math.floor(msAcumulado / 3600000);
+        const accM = Math.floor((msAcumulado % 3600000) / 60000);
+        grid.push({
+          fecha: `${String(day).padStart(2, '0')}/${String(m + 1).padStart(2, '0')}/${y}`,
+          horas: calc.ms > 0 ? calc.text : 'F',
+          acumulado: `${accH}:${accM.toString().padStart(2, '0')}`
+        });
+      }
+
+      const mesStart = `${mesDesempeno}-01`;
+      const mesEnd = `${mesDesempeno}-31`;
+      const iMes = inspecciones.filter(i => i.inspector === modalDesempeno && i.created_at.substring(0, 10) >= mesStart && i.created_at.substring(0, 10) <= mesEnd);
+      
+      const kpis: any = {}; const temas: any = {};
+      iMes.forEach(i => {
+        kpis[i.tipo] = (kpis[i.tipo] || 0) + 1;
+        if (i.tipo.includes('TEMAS') && i.datos_formulario?.tema_tipo) temas[i.datos_formulario.tema_tipo] = (temas[i.datos_formulario.tema_tipo] || 0) + 1;
+      });
+
+      setDesempenoDatos({ grid, totalMs: msAcumulado, kpis, temas, mapaIns: iMes });
+    }
+  }, [modalDesempeno, mesDesempeno, inspecciones, shifts]);
 
   if (!adminUser) return <div className="p-10 text-center">Cargando...</div>;
 
@@ -185,6 +265,7 @@ export default function DashboardPage() {
         <div className="p-6 bg-white m-4 rounded-lg text-center"><img src="https://i.ibb.co/RG0tNq6t/Logo-Web-copia.png" className="h-10 mx-auto" alt="Logo" /><div className="text-[#003366] text-[10px] font-black mt-2">GESTIÓN OPERATIVA V3</div></div>
         <nav className="flex-1 px-2 space-y-2">
           <button onClick={() => setActiveTab('reportes')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'reportes' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>📊 Reportes</button>
+          <button onClick={() => setActiveTab('desempeno')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'desempeno' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>👥 Desempeño</button>
           <button onClick={() => setActiveTab('mapa')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'mapa' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>📍 Mapa Satelital</button>
           <button onClick={() => setActiveTab('usuarios')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'usuarios' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>⚙️ Usuarios</button>
         </nav>
@@ -195,24 +276,10 @@ export default function DashboardPage() {
         {/* TOP BAR FILTROS */}
         <div className="bg-white p-4 shadow-sm flex justify-between items-center z-10 shrink-0 border-b">
           <div className="flex gap-4 items-center flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-500 uppercase">Desde</span>
-              <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="border p-2 rounded text-sm bg-gray-50" />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-500 uppercase">Hasta</span>
-              <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="border p-2 rounded text-sm bg-gray-50" />
-            </div>
-            
-            {/* Nuevos Filtros Globales (Afectan Tabla y Mapa) */}
-            <select value={filtroInspector} onChange={(e)=>setFiltroInspector(e.target.value)} className="border p-2 rounded text-sm bg-white font-bold text-[#003366]">
-              <option value="">Todos los Inspectores</option>
-              {inspectoresUnicos.map((i:any) => <option key={i} value={i}>{i}</option>)}
-            </select>
-            <select value={filtroTipo} onChange={(e)=>setFiltroTipo(e.target.value)} className="border p-2 rounded text-sm bg-white font-bold text-[#003366] max-w-xs">
-              <option value="">Todos los Tipos</option>
-              {tiposUnicos.map((t:any) => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <div className="flex items-center gap-2"><span className="text-xs font-bold text-gray-500 uppercase">Desde</span><input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="border p-2 rounded text-sm bg-gray-50" /></div>
+            <div className="flex items-center gap-2"><span className="text-xs font-bold text-gray-500 uppercase">Hasta</span><input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="border p-2 rounded text-sm bg-gray-50" /></div>
+            <select value={filtroInspector} onChange={(e)=>setFiltroInspector(e.target.value)} className="border p-2 rounded text-sm bg-white font-bold text-[#003366]"><option value="">Todos los Inspectores</option>{inspectoresUnicos.map((i:any) => <option key={i} value={i}>{i}</option>)}</select>
+            <select value={filtroTipo} onChange={(e)=>setFiltroTipo(e.target.value)} className="border p-2 rounded text-sm bg-white font-bold text-[#003366] max-w-xs"><option value="">Todos los Tipos</option>{tiposUnicos.map((t:any) => <option key={t} value={t}>{t}</option>)}</select>
           </div>
           <div className="font-bold text-[#003366]">👤 {adminUser.nombre}</div>
         </div>
@@ -223,13 +290,13 @@ export default function DashboardPage() {
               {/* --- REPORTES --- */}
               {activeTab === 'reportes' && (
                 <div className="space-y-6">
-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-6">
+                  <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-6">
                     <div className="min-w-[150px] border-r pr-4"><h3 className="text-gray-400 font-bold uppercase text-[10px]">Total Inspecciones</h3><div className="text-4xl font-black text-[#003366]">{dataTabla.length}</div></div>
                     <div className="flex-1 h-32"><Line data={{ labels: last12Months, datasets: [{ data: trendData, borderColor: '#3b82f6', backgroundColor: '#dc3545', pointRadius: 4, tension: 0.3 }] }} options={chartOptionsNumbers} /></div>
                   </div>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#003366] font-bold mb-4">Distribución por Tipo</h3><div className="h-64"><Bar data={chartTipos} options={chartOptionsNumbers} /></div></div>
-                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#003366] font-bold mb-4">Total por Inspector</h3><div className="h-64"><Bar data={chartInspectores} options={chartOptionsNumbers} /></div></div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#003366] font-bold mb-4">Distribución por Tipo {selectedInspectorChart && <span className="text-xs text-orange-500 ml-2">(Filtrado por: {selectedInspectorChart})</span>}</h3><div className="h-64"><Bar data={chartTipos} options={optionsTypeChart} /></div></div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#003366] font-bold mb-4">Total por Inspector <span className="text-[10px] font-normal text-gray-400">(Clic para filtrar)</span></h3><div className="h-64"><Bar data={chartInspectores} options={optionsInspectorChart} /></div></div>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm border flex flex-col h-[500px]">
                     <div className="bg-gray-50 p-4 border-b flex justify-between items-center shrink-0 flex-wrap gap-2">
@@ -241,11 +308,11 @@ export default function DashboardPage() {
                     </div>
                     <div className="overflow-y-auto flex-1 relative">
                       <table className="w-full text-sm text-left">
-                        <thead className="bg-white text-[#003366] sticky top-0 shadow-sm z-10"><tr><th className="p-3">Fecha</th><th className="p-3">Inspector</th><th className="p-3">Tipo</th><th className="p-3">Observaciones</th><th className="p-3 text-center">Acción</th><th className="p-3 text-center">Estado</th></tr></thead>
+                        <thead className="bg-white text-[#003366] sticky top-0 shadow-sm z-10"><tr><th className="p-3">Fecha/Lugar</th><th className="p-3">Inspector</th><th className="p-3">Tipo</th><th className="p-3">Observaciones</th><th className="p-3 text-center">Acción</th><th className="p-3 text-center">Estado</th></tr></thead>
                         <tbody>
-                          {dataTabla.map(ins => (
+                          {dataFinalTabla.map(ins => (
                             <tr key={ins.id} className="border-b hover:bg-gray-50">
-                              <td className="p-3 font-medium">{new Date(ins.created_at).toLocaleDateString()} {new Date(ins.created_at).toLocaleTimeString().slice(0,5)}</td>
+                              <td className="p-3 whitespace-nowrap"><a href={`https://www.google.com/maps/search/?api=1&query=${ins.lat},${ins.lon}`} target="_blank" className="text-blue-600 hover:underline font-bold" title="Ver en Mapa">{new Date(ins.created_at).toLocaleDateString()} {new Date(ins.created_at).toLocaleTimeString().slice(0,5)} 📍</a></td>
                               <td className="p-3 font-bold">{ins.inspector}</td>
                               <td className="p-3"><span className="bg-gray-100 px-2 py-1 rounded text-[10px] font-bold border truncate block max-w-[200px]">{ins.tipo}</span></td>
                               <td className="p-3 text-xs text-gray-600 max-w-[200px] truncate">{ins.obs_general}</td>
@@ -260,16 +327,34 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* --- MAPA SATELITAL --- */}
+              {/* --- DESEMPEÑO PERSONAL --- */}
+              {activeTab === 'desempeno' && (
+                <div className="space-y-6">
+                  <h2 className="text-[#003366] font-bold text-xl mb-4 border-b-2 border-[#FFCC00] pb-2 inline-block">Reporte de Horas y Desempeño Diario</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {inspectoresUnicos.map((insp: any) => {
+                      const stats = getHorasRango(insp, fechaInicio, fechaFin);
+                      const totalIns = inspecciones.filter(i => i.inspector === insp && i.created_at >= `${fechaInicio}T00:00:00Z` && i.created_at <= `${fechaFin}T23:59:59Z`).length;
+                      return (
+                        <div key={insp} className="bg-white p-6 rounded-xl shadow-sm border flex flex-col justify-between hover:shadow-md transition-shadow">
+                          <div>
+                            <h3 className="text-lg font-black text-[#003366] mb-4">{insp}</h3>
+                            <div className="flex items-baseline gap-2 mb-2"><span className="text-4xl font-light text-[#003366]">{stats.text}</span><span className="text-sm text-gray-500">hs acumuladas</span></div>
+                            <div className="flex items-baseline gap-2 mb-6"><span className="text-xl font-bold text-gray-800">{totalIns}</span><span className="text-sm text-gray-500">inspecciones</span></div>
+                          </div>
+                          <button onClick={() => setModalDesempeno(insp)} className="w-full bg-[#FFCC00] text-[#003366] py-3 rounded font-bold hover:bg-yellow-400">VER DETALLE</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* --- MAPA --- */}
               {activeTab === 'mapa' && (
                 <div className="h-full flex flex-col bg-white rounded-xl shadow-sm border p-4">
-                  <div className="mb-4 flex justify-between items-center">
-                    <h2 className="text-[#003366] font-bold text-lg">📍 Mapa de Inspecciones</h2>
-                    <span className="bg-green-100 text-green-800 px-3 py-1 rounded text-xs font-bold border border-green-200">{dataTabla.length} Puntos encontrados</span>
-                  </div>
-                  <div className="flex-1 rounded-xl overflow-hidden border">
-                    <MapComponent inspecciones={dataTabla} onVerFicha={(ins:any) => setModalIns(ins)} />
-                  </div>
+                  <div className="mb-4 flex justify-between items-center"><h2 className="text-[#003366] font-bold text-lg">📍 Mapa de Inspecciones</h2><span className="bg-green-100 text-green-800 px-3 py-1 rounded text-xs font-bold border border-green-200">{dataTabla.length} Puntos</span></div>
+                  <div className="flex-1 rounded-xl overflow-hidden border"><MapComponent inspecciones={dataTabla} onVerFicha={(ins:any) => setModalIns(ins)} /></div>
                 </div>
               )}
 
@@ -312,9 +397,74 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* MODAL FICHA (Reutilizable para Reportes y Mapa) */}
-      {modalIns && (
+      {/* --- MODAL DESEMPEÑO --- */}
+      {modalDesempeno && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
+          <div className="bg-white w-full max-w-6xl rounded-xl shadow-2xl flex flex-col h-[95vh]">
+            <div className="bg-[#003366] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0">
+              <h2 className="font-bold text-lg">Desempeño: {modalDesempeno}</h2>
+              <button onClick={() => setModalDesempeno(null)} className="text-3xl leading-none hover:text-red-400">&times;</button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 bg-white">
+              <div className="flex justify-between items-center mb-6 bg-gray-50 p-4 rounded border">
+                <span className="font-bold text-[#003366]">Seleccionar Mes de Análisis:</span>
+                <input type="month" value={mesDesempeno} onChange={(e) => setMesDesempeno(e.target.value)} className="border p-2 rounded text-sm font-bold" />
+              </div>
+
+              <div className="flex flex-col lg:flex-row gap-8 mb-8">
+                {/* COL IZQ: KPIS */}
+                <div className="flex-1 space-y-4">
+                  <h3 className="font-bold text-[#003366] border-b-2 border-[#FFCC00] pb-2 text-lg">Inspecciones Realizadas</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-[#eef4f9] p-4 rounded text-center col-span-2 border"><div className="font-bold text-[#003366] text-sm mb-1">Total Inspecciones</div><div className="text-3xl font-light text-[#003366]">{desempenoDatos.mapaIns.length}</div></div>
+                    {Object.entries(desempenoDatos.kpis).map(([k, v]:any) => (
+                      <div key={k} className="bg-gray-50 p-4 rounded text-center border">
+                        <div className="font-bold text-gray-700 text-xs mb-1 h-8 flex items-center justify-center">{k}</div>
+                        <div className="text-xl font-bold text-[#FFCC00] drop-shadow-sm">{v}</div>
+                        {k.includes('TEMAS') && Object.keys(desempenoDatos.temas).length > 0 && (
+                          <div className="mt-2 text-left text-[9px] text-gray-500 border-t pt-2 space-y-1">
+                            {Object.entries(desempenoDatos.temas).map(([tk, tv]:any) => <div key={tk} className="flex justify-between"><span>{tk}</span><b>{tv}</b></div>)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* COL DER: GRILLA DIARIA */}
+                <div className="flex-1">
+                  <h3 className="font-bold text-[#003366] border-b-2 border-[#FFCC00] pb-2 text-lg mb-4">Grilla de Horas Diarias</h3>
+                  <div className="border rounded overflow-hidden max-h-[400px] overflow-y-auto">
+                    <table className="w-full text-sm text-center">
+                      <thead className="bg-gray-50 text-[#003366] sticky top-0 shadow-sm font-bold"><tr><th className="p-3">Fecha</th><th className="p-3">Horas Trabajadas</th><th className="p-3">Horas Acumuladas</th></tr></thead>
+                      <tbody>
+                        {desempenoDatos.grid.map((g:any) => (
+                          <tr key={g.fecha} className="border-b last:border-0 hover:bg-gray-50">
+                            <td className="p-3 text-gray-600">{g.fecha}</td>
+                            <td className={`p-3 font-bold ${g.horas === 'F' ? 'text-red-500' : 'text-[#003366]'}`}>{g.horas}</td>
+                            <td className="p-3 text-gray-600">{g.acumulado}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* MAPA INFERIOR */}
+              <h3 className="font-bold text-[#003366] border-b-2 border-[#FFCC00] pb-2 text-lg mb-4">Ubicación de Registros ({mesDesempeno})</h3>
+              <div className="h-[400px] rounded border overflow-hidden">
+                 <MapComponent inspecciones={desempenoDatos.mapaIns} onVerFicha={(ins:any) => { setModalDesempeno(null); setModalIns(ins); }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FICHA */}
+      {modalIns && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[110] backdrop-blur-sm">
           <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl flex flex-col h-[90vh]">
             <div className="bg-[#003366] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0"><h2 className="font-bold text-lg">Inspección: {modalIns.id}</h2><button onClick={() => setModalIns(null)} className="text-3xl leading-none hover:text-red-400">&times;</button></div>
             <div className="p-6 overflow-y-auto flex-1 bg-gray-50">
@@ -326,9 +476,7 @@ export default function DashboardPage() {
                   return (<div key={k} className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#003366] block uppercase">{k.replace(/_/g, ' ')}</label><span className="text-sm font-medium">{v}</span></div>);
                 })}
               </div>
-              {modalIns.fotos && modalIns.fotos.length > 0 && (
-                <div className="mb-6"><h3 className="font-bold text-[#003366] border-b pb-2 mb-3">Fotos</h3><div className="flex gap-4 overflow-x-auto pb-2">{modalIns.fotos.map((url:string, i:number) => (<a key={i} href={url} target="_blank"><img src={url} className="h-32 rounded border hover:scale-105" /></a>))}</div></div>
-              )}
+              {modalIns.fotos && modalIns.fotos.length > 0 && (<div className="mb-6"><h3 className="font-bold text-[#003366] border-b pb-2 mb-3">Fotos</h3><div className="flex gap-4 overflow-x-auto pb-2">{modalIns.fotos.map((url:string, i:number) => (<a key={i} href={url} target="_blank"><img src={url} className="h-32 rounded border hover:scale-105" /></a>))}</div></div>)}
               <div className="bg-white p-4 rounded border-t-4 border-[#FFCC00] shadow-sm">
                 <h3 className="font-bold text-[#003366] flex items-center gap-2 mb-4">📝 Seguimiento y Acciones</h3>
                 <div className="space-y-2 mb-4 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded border">
