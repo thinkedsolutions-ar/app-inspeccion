@@ -19,14 +19,14 @@ export default function ImportPage() {
     addToLog(`Leyendo archivo: ${file.name}...`);
 
     Papa.parse(file, {
-      header: true, // Usa la primera fila como nombres de variables
+      header: true,
       skipEmptyLines: true,
       complete: async (results) => {
         const filas = results.data as any[];
         addToLog(`Se encontraron ${filas.length} registros en el CSV.`);
 
         const payload = filas.map((row) => {
-          // 1. Extraer URLs de fotos separadas por coma
+          // 1. Extraer URLs
           let fotosArray: string[] = [];
           if (row['links_fotos']) {
             fotosArray = row['links_fotos'].split(',').map((s: string) => s.trim()).filter((s: string) => s !== '');
@@ -34,18 +34,36 @@ export default function ImportPage() {
             fotosArray = row['foto'].split(',').map((s: string) => s.trim()).filter((s: string) => s !== '');
           }
 
-          // 2. Extraer observación según el tipo de hoja
+          // 2. Extraer Observación
           const observacion = row['calle_obs_general'] || row['emop_observacion'] || row['asp_obs_general'] || row['observacion_seguimiento_temas'] || row['desc_limp_int_obs'] || '';
 
-          // 3. Normalizar Fecha y Hora
-          let fechaHora = new Date().toISOString();
-          if (row['timestamp']) {
-            fechaHora = new Date(row['timestamp']).toISOString();
-          } else if (row['fecha']) {
-            fechaHora = new Date(row['fecha']).toISOString();
+          // 3. NORMALIZACIÓN DE FECHAS (Reparado)
+          let fechaHora = new Date().toISOString(); // Por defecto, ahora
+          const rawDate = row['timestamp'] || row['fecha'];
+          
+          if (rawDate && rawDate.trim() !== '') {
+            try {
+              let parsedDate = new Date(rawDate);
+              // Si la fecha es inválida (ej. formato DD/MM/YYYY), intentamos arreglarla
+              if (isNaN(parsedDate.getTime())) {
+                const parts = rawDate.split('/');
+                if (parts.length >= 3) {
+                  // Intercambiamos Día (parts[0]) y Mes (parts[1])
+                  const mes = parts[1].trim();
+                  const dia = parts[0].trim();
+                  const anioYResto = parts[2].trim();
+                  parsedDate = new Date(`${mes}/${dia}/${anioYResto}`);
+                }
+              }
+              // Si finalmente logramos una fecha válida, la usamos
+              if (!isNaN(parsedDate.getTime())) {
+                fechaHora = parsedDate.toISOString();
+              }
+            } catch (err) {
+              // Si todo falla, queda con la fecha por defecto
+            }
           }
 
-          // 4. Limpiar nombre del inspector si viene con espacios extra
           let nombreInspector = row['inspector_legajo_nombre'] || 'Desconocido';
           
           return {
@@ -57,13 +75,12 @@ export default function ImportPage() {
             lon: parseFloat(row['longitude']) || null,
             fotos: fotosArray,
             obs_general: observacion,
-            datos_formulario: row // Toda la fila cruda se guarda en el JSONB
+            datos_formulario: row
           };
         });
 
         addToLog(`Subiendo ${payload.length} registros a Supabase...`);
 
-        // Subir en bloques de 100 para evitar saturar la base de datos
         let successCount = 0;
         let errorCount = 0;
         const chunkSize = 100;
@@ -73,14 +90,15 @@ export default function ImportPage() {
           const { error } = await supabase.from('inspections').insert(chunk);
           
           if (error) {
-            addToLog(`❌ Error en el bloque ${i}: ${error.message}`);
+            addToLog(`❌ Error en bloque ${i}: ${error.message}`);
             errorCount += chunk.length;
           } else {
             successCount += chunk.length;
+            addToLog(`➡️ Progreso: ${successCount} / ${payload.length}`);
           }
         }
 
-        addToLog(`✅ Proceso finalizado. Subidos con éxito: ${successCount}. Errores: ${errorCount}.`);
+        addToLog(`✅ Proceso finalizado. Éxito: ${successCount}. Errores: ${errorCount}.`);
         setLoading(false);
       }
     });
@@ -110,16 +128,9 @@ export default function ImportPage() {
 
         <div className="mb-6 space-y-4 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
           <label className="block font-bold text-[#003366]">2. Suba el archivo .CSV de Google Sheets:</label>
-          <input 
-            type="file" 
-            accept=".csv"
-            onChange={handleFileUpload}
-            disabled={loading}
-            className="w-full p-2 bg-white border rounded"
-          />
+          <input type="file" accept=".csv" onChange={handleFileUpload} disabled={loading} className="w-full p-2 bg-white border rounded" />
         </div>
 
-        {/* Consola de Logs */}
         <div className="bg-black text-green-400 p-4 rounded-lg font-mono text-xs h-64 overflow-y-auto">
           {log.length === 0 ? "Esperando archivo CSV..." : log.map((msg, i) => <div key={i}>{msg}</div>)}
         </div>
