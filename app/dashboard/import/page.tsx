@@ -25,7 +25,7 @@ export default function ImportPage() {
         const filas = results.data as any[];
         addToLog(`Se encontraron ${filas.length} registros en el CSV.`);
 
-        const payload = filas.map((row) => {
+        const payload = filas.map((row, index) => {
           // 1. Extraer URLs
           let fotosArray: string[] = [];
           if (row['links_fotos']) {
@@ -37,37 +37,35 @@ export default function ImportPage() {
           // 2. Extraer Observación
           const observacion = row['calle_obs_general'] || row['emop_observacion'] || row['asp_obs_general'] || row['observacion_seguimiento_temas'] || row['desc_limp_int_obs'] || '';
 
-          // 3. NORMALIZACIÓN DE FECHAS (Reparado)
-          let fechaHora = new Date().toISOString(); // Por defecto, ahora
+          // 3. NORMALIZACIÓN DE FECHAS
+          let fechaHora = new Date().toISOString();
           const rawDate = row['timestamp'] || row['fecha'];
           
           if (rawDate && rawDate.trim() !== '') {
             try {
               let parsedDate = new Date(rawDate);
-              // Si la fecha es inválida (ej. formato DD/MM/YYYY), intentamos arreglarla
               if (isNaN(parsedDate.getTime())) {
                 const parts = rawDate.split('/');
                 if (parts.length >= 3) {
-                  // Intercambiamos Día (parts[0]) y Mes (parts[1])
                   const mes = parts[1].trim();
                   const dia = parts[0].trim();
                   const anioYResto = parts[2].trim();
                   parsedDate = new Date(`${mes}/${dia}/${anioYResto}`);
                 }
               }
-              // Si finalmente logramos una fecha válida, la usamos
               if (!isNaN(parsedDate.getTime())) {
                 fechaHora = parsedDate.toISOString();
               }
-            } catch (err) {
-              // Si todo falla, queda con la fecha por defecto
-            }
+            } catch (err) {}
           }
 
           let nombreInspector = row['inspector_legajo_nombre'] || 'Desconocido';
           
+          // Generador de ID a prueba de fallos (Evita que se repitan si el CSV viene sin IDs)
+          const fallbackId = `IMP-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
           return {
-            id: row['id_inspeccion'] || `${new Date().getTime()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`,
+            id: row['id_inspeccion'] ? String(row['id_inspeccion']).trim() : fallbackId,
             created_at: fechaHora,
             inspector: nombreInspector,
             tipo: tipoSeleccionado,
@@ -79,7 +77,7 @@ export default function ImportPage() {
           };
         });
 
-        addToLog(`Subiendo ${payload.length} registros a Supabase...`);
+        addToLog(`Subiendo ${payload.length} registros a Supabase usando UPSERT...`);
 
         let successCount = 0;
         let errorCount = 0;
@@ -87,7 +85,9 @@ export default function ImportPage() {
         
         for (let i = 0; i < payload.length; i += chunkSize) {
           const chunk = payload.slice(i, i + chunkSize);
-          const { error } = await supabase.from('inspections').insert(chunk);
+          
+          // LA MAGIA ESTÁ AQUÍ: usamos "upsert" en lugar de "insert"
+          const { error } = await supabase.from('inspections').upsert(chunk, { onConflict: 'id' });
           
           if (error) {
             addToLog(`❌ Error en bloque ${i}: ${error.message}`);
