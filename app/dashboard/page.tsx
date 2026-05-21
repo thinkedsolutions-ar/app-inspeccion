@@ -7,7 +7,7 @@ import { Bar, Line } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import dynamic from 'next/dynamic';
 
-const MapComponent = dynamic(() => import('./MapaInteract'), { ssr: false });
+const MapComponent = dynamic(() => import('./MapaInteracts'), { ssr: false });
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement, ChartDataLabels);
 
