@@ -350,31 +350,28 @@ export default function InspeccionPage() {
                   {/* NUEVA SECCIÓN: CONDUCCIÓN */}
                   <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm text-sm">
                     <div className="bg-[#003366] text-white p-2 font-bold uppercase">Conducción</div>
-                    <div className="bg-white p-4 space-y-4">
+                    <div className="bg-white p-3 sm:p-4 space-y-4">
                       {[
-                        { k: 'ascenso_descenso', l: 'Ascenso / Descenso de pasajeros' },
-                        { k: 'exceso_velocidad', l: 'Excesos de velocidad' },
-                        { k: 'marcha', l: 'Inicio y fin de marcha (Cambios)' },
-                        { k: 'adelanto', l: 'Adelanto' }
+                        { k: 'ascenso_descenso', l: 'Ascenso / Descenso de pasajeros', opts: ['1','2','3','4','5','N/C'] },
+                        { k: 'exceso_velocidad', l: 'Excesos de velocidad', opts: ['SI','NO'] },
+                        { k: 'marcha', l: 'Inicio y fin de marcha (Cambios)', opts: ['1','2','3','4','5','N/C'] },
+                        { k: 'adelanto', l: 'Maniobra de adelanto', opts: ['1','2','3','4','5','N/C'] }
                       ].map((item) => (
                         <div key={item.k} className="border-b border-gray-200 pb-3 last:border-0 last:pb-0">
-                           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
+                           {/* Fila del Select */}
+                           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-2 mb-2">
                              <label className="font-bold text-[#003366] text-xs">{item.l}</label>
-                             <select className="border border-gray-300 p-2 rounded sm:w-1/3 text-xs bg-white font-bold" 
+                             <select className="border border-gray-300 p-2 rounded w-full sm:w-1/3 text-xs bg-white font-bold" 
                                value={formData[`cond_${item.k}`] || ''} 
                                onChange={(e) => handleChange(`cond_${item.k}`, e.target.value)} required>
                                <option value="">--</option>
-                               <option value="1">1</option>
-                               <option value="2">2</option>
-                               <option value="3">3</option>
-                               <option value="4">4</option>
-                               <option value="5">5</option>
-                               <option value="N/C">N/C</option>
+                               {item.opts.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                              </select>
                            </div>
-                           <div className="flex gap-2 items-center">
-                             <label className="text-[10px] font-bold text-[#003366] uppercase w-28">OBSERVACIONES:</label>
-                             <input type="text" className="flex-1 border border-gray-300 p-2 rounded text-xs bg-white" 
+                           {/* Fila de Observaciones */}
+                           <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                             <label className="text-[10px] font-bold text-[#003366] uppercase sm:w-28 shrink-0">OBSERVACIONES:</label>
+                             <input type="text" className="w-full border border-gray-300 p-2 rounded text-xs bg-white" 
                                value={formData[`obs_cond_${item.k}`] || ''} 
                                onChange={(e) => handleChange(`obs_cond_${item.k}`, e.target.value)} />
                            </div>
