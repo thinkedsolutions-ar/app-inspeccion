@@ -19,7 +19,7 @@ export default function DashboardPage() {
   const [inspecciones, setInspecciones] = useState<any[]>([]);
   const [followups, setFollowups] = useState<any[]>([]);
   const [usuarios, setUsuarios] = useState<any[]>([]);
-  const [shifts, setShifts] = useState<any[]>([]); // NUEVO: Para calcular horas
+  const [shifts, setShifts] = useState<any[]>([]); // NUEVO: Para calcular horassss
   
   const [fechaInicio, setFechaInicio] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; });
   const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
