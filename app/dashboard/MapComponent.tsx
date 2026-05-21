@@ -15,7 +15,7 @@ const blueIcon = L.divIcon({
   iconAnchor: [8, 8]
 });
 
-// 2. Función para crear los círculos de agrupación (VERDE / AMARILLO)
+// 2. Función para crear los círculos de agrupación (VERDE / AMARILLO....)
 const createClusterCustomIcon = (cluster: any) => {
   const count = cluster.getChildCount();
   let color = '#4caf50'; // Verde por defecto (2 a 14)

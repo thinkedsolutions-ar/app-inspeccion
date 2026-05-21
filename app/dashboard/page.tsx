@@ -271,6 +271,7 @@ export default function DashboardPage() {
       setDesempenoDatos({ grid, totalMs: msAcumulado, kpis, temas, mapaIns: iMes, mapaShifts: shiftsNorm });
     }
   }, [modalDesempeno, mesDesempeno, inspecciones, shifts]);
+
 // --- FILTRO DINÁMICO PARA EL MAPA DE DESEMPEÑO ---
   const mapDataToShow = (mapaVista === 'inspecciones' ? (desempenoDatos?.mapaIns || []) : (desempenoDatos?.mapaShifts || []))
       .filter((item: any) => selectedDateFilter ? item.created_at.substring(0,10) === selectedDateFilter : true);
@@ -476,39 +477,36 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
-
-              {/* MAPA INFERIOR */}
-              <h3 className="font-bold text-[#003366] border-b-2 border-[#FFCC00] pb-2 text-lg mb-4">Ubicación de Registros ({mesDesempeno})</h3>
               {/* MAPA INFERIOR CON FILTROS */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 mt-8">
-                  <h3 className="font-bold text-[#003366] border-b-2 border-[#FFCC00] pb-2 text-lg">
-                    Ubicación de Registros ({mesDesempeno})
-                    {selectedDateFilter && <span className="ml-2 text-sm text-blue-600 font-normal bg-blue-100 px-2 py-1 rounded">(Día: {selectedDateFilter.split('-').reverse().join('/')})</span>}
-                  </h3>
-                  <div className="flex gap-4 items-center bg-gray-50 p-2 rounded border shadow-sm">
-                    <label className="flex items-center gap-2 text-sm font-bold text-[#003366] cursor-pointer">
-                      <input type="radio" checked={mapaVista === 'inspecciones'} onChange={() => setMapaVista('inspecciones')} className="accent-[#003366] w-4 h-4" />
-                      Inspecciones
-                    </label>
-                    <label className="flex items-center gap-2 text-sm font-bold text-[#003366] cursor-pointer">
-                      <input type="radio" checked={mapaVista === 'jornadas'} onChange={() => setMapaVista('jornadas')} className="accent-[#003366] w-4 h-4" />
-                      Inicios/Fin de Jornada
-                    </label>
-                  </div>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 mt-8">
+                <h3 className="font-bold text-[#003366] border-b-2 border-[#FFCC00] pb-2 text-lg">
+                  Ubicación de Registros ({mesDesempeno})
+                  {selectedDateFilter && <span className="ml-2 text-sm text-blue-600 font-normal bg-blue-100 px-2 py-1 rounded">(Día: {selectedDateFilter.split('-').reverse().join('/')})</span>}
+                </h3>
+                <div className="flex gap-4 items-center bg-gray-50 p-2 rounded border shadow-sm">
+                  <label className="flex items-center gap-2 text-sm font-bold text-[#003366] cursor-pointer">
+                    <input type="radio" checked={mapaVista === 'inspecciones'} onChange={() => setMapaVista('inspecciones')} className="accent-[#003366] w-4 h-4" />
+                    Inspecciones
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-bold text-[#003366] cursor-pointer">
+                    <input type="radio" checked={mapaVista === 'jornadas'} onChange={() => setMapaVista('jornadas')} className="accent-[#003366] w-4 h-4" />
+                    Inicios/Fin de Jornada
+                  </label>
                 </div>
-                <div className="h-[400px] rounded-xl border-2 border-gray-200 overflow-hidden shadow-inner bg-gray-100">
-                  <MapComponent 
-                    inspecciones={mapDataToShow} 
-                    onVerFicha={(ins:any) => { 
-                      if(ins.isShift) { 
-                        alert("📍 Este punto es un registro automático de GPS de Jornada, no posee una ficha de inspección."); 
-                      } else { 
-                        setModalDesempeno(null); 
-                        setModalIns(ins); 
-                      }
-                    }} 
-                  />
-                </div>
+              </div>
+              <div className="h-[400px] rounded-xl border-2 border-gray-200 overflow-hidden shadow-inner bg-gray-100">
+                <MapComponent 
+                  inspecciones={mapDataToShow} 
+                  onVerFicha={(ins:any) => { 
+                    if(ins.isShift) { 
+                      alert("📍 Este punto es un registro automático de GPS de Jornada, no posee una ficha de inspección."); 
+                    } else { 
+                      setModalDesempeno(null); 
+                      setModalIns(ins); 
+                    }
+                  }} 
+                />
+              </div>
             </div>
           </div>
         </div>
