@@ -19,7 +19,7 @@ export default function DashboardPage() {
   const [inspecciones, setInspecciones] = useState<any[]>([]);
   const [followups, setFollowups] = useState<any[]>([]);
   const [usuarios, setUsuarios] = useState<any[]>([]);
-  const [shifts, setShifts] = useState<any[]>([]); // NUEVO: Para calcular horas
+  const [shifts, setShifts] = useState<any[]>([]);
   
   const [fechaInicio, setFechaInicio] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; });
   const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
@@ -36,11 +36,14 @@ export default function DashboardPage() {
   const [selectedInspectorChart, setSelectedInspectorChart] = useState<string | null>(null);
   const [selectedTypeChart, setSelectedTypeChart] = useState<string | null>(null);
 
-  // NUEVOS ESTADOS: Desempeño
+  // ESTADOS DE DESEMPEÑO ACTUALIZADOS
   const [modalDesempeno, setModalDesempeno] = useState<string | null>(null);
   const [mesDesempeno, setMesDesempeno] = useState(() => {
     const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [mapModeDesempeno, setMapModeDesempeno] = useState<'inspecciones' | 'jornadas'>('inspecciones');
+  const [selectedDateDesempeno, setSelectedDateDesempeno] = useState<string | null>(null);
+  const [desempenoDatos, setDesempenoDatos] = useState<any>({ grid: [], totalMs: 0, kpis: {}, temas: {}, mapaIns: [], mapaShifts: [] });
 
   useEffect(() => {
     const session = localStorage.getItem('buttini_user');
@@ -51,7 +54,6 @@ export default function DashboardPage() {
     fetchData(); fetchUsers();
   },[]);
 
-  // SE MODIFICÓ ESTA FUNCIÓN: Se agregó supabase.from('shifts')...
   const fetchData = async () => {
     setLoading(true);
     const dYearAgo = new Date(); dYearAgo.setFullYear(dYearAgo.getFullYear() - 1);
@@ -180,7 +182,7 @@ export default function DashboardPage() {
 
   const dataFinalTabla = selectedTypeChart ? dataTabla.filter(ins => ins.tipo === selectedTypeChart) : dataTabla;
 
-  // --- LÓGICA DE HORAS TRABAJADAS (DESEMPEÑO) ---
+  // --- LÓGICA DE DESEMPEÑO ---
   const getHorasRango = (nombreInsp: string, inicioYMD: string, finYMD: string) => {
     const sFiltrados = shifts.filter(s => s.nombre === nombreInsp && s.fecha.substring(0,10) >= inicioYMD && s.fecha.substring(0,10) <= finYMD);
     const iFiltradas = inspecciones.filter(i => i.inspector === nombreInsp && i.created_at.substring(0,10) >= inicioYMD && i.created_at.substring(0,10) <= finYMD);
@@ -216,9 +218,6 @@ export default function DashboardPage() {
     return { ms: totalMs, text: `${h}:${m.toString().padStart(2, '0')}` };
   };
 
-  // --- LÓGICA MODAL DESEMPEÑO (Mes Específico) ---
-  const [desempenoDatos, setDesempenoDatos] = useState<any>({ grid: [], totalMs: 0, kpis: {}, temas: {}, mapaIns: [] });
-
   useEffect(() => {
     if (modalDesempeno) {
       const parts = mesDesempeno.split('-');
@@ -235,6 +234,7 @@ export default function DashboardPage() {
         const accH = Math.floor(msAcumulado / 3600000);
         const accM = Math.floor((msAcumulado % 3600000) / 60000);
         grid.push({
+          dateStr: dateStr, // Necesario para el filtro cruzado del mapa
           fecha: `${String(day).padStart(2, '0')}/${String(m + 1).padStart(2, '0')}/${y}`,
           horas: calc.ms > 0 ? calc.text : 'F',
           acumulado: `${accH}:${accM.toString().padStart(2, '0')}`
@@ -244,6 +244,7 @@ export default function DashboardPage() {
       const mesStart = `${mesDesempeno}-01`;
       const mesEnd = `${mesDesempeno}-31`;
       const iMes = inspecciones.filter(i => i.inspector === modalDesempeno && i.created_at.substring(0, 10) >= mesStart && i.created_at.substring(0, 10) <= mesEnd);
+      const sMes = shifts.filter(s => s.nombre === modalDesempeno && s.fecha.substring(0, 10) >= mesStart && s.fecha.substring(0, 10) <= mesEnd && (s.accion === 'INICIO' || s.accion === 'FIN'));
       
       const kpis: any = {}; const temas: any = {};
       iMes.forEach(i => {
@@ -251,7 +252,7 @@ export default function DashboardPage() {
         if (i.tipo.includes('TEMAS') && i.datos_formulario?.tema_tipo) temas[i.datos_formulario.tema_tipo] = (temas[i.datos_formulario.tema_tipo] || 0) + 1;
       });
 
-      setDesempenoDatos({ grid, totalMs: msAcumulado, kpis, temas, mapaIns: iMes });
+      setDesempenoDatos({ grid, totalMs: msAcumulado, kpis, temas, mapaIns: iMes, mapaShifts: sMes });
     }
   }, [modalDesempeno, mesDesempeno, inspecciones, shifts]);
 
@@ -342,7 +343,7 @@ export default function DashboardPage() {
                             <div className="flex items-baseline gap-2 mb-2"><span className="text-4xl font-light text-[#003366]">{stats.text}</span><span className="text-sm text-gray-500">hs acumuladas</span></div>
                             <div className="flex items-baseline gap-2 mb-6"><span className="text-xl font-bold text-gray-800">{totalIns}</span><span className="text-sm text-gray-500">inspecciones</span></div>
                           </div>
-                          <button onClick={() => setModalDesempeno(insp)} className="w-full bg-[#FFCC00] text-[#003366] py-3 rounded font-bold hover:bg-yellow-400">VER DETALLE</button>
+                          <button onClick={() => { setModalDesempeno(insp); setMapModeDesempeno('inspecciones'); setSelectedDateDesempeno(null); }} className="w-full bg-[#FFCC00] text-[#003366] py-3 rounded font-bold hover:bg-yellow-400">VER DETALLE</button>
                         </div>
                       );
                     })}
@@ -350,7 +351,7 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* --- MAPA --- */}
+              {/* --- MAPA GLOBAL --- */}
               {activeTab === 'mapa' && (
                 <div className="h-full flex flex-col bg-white rounded-xl shadow-sm border p-4">
                   <div className="mb-4 flex justify-between items-center"><h2 className="text-[#003366] font-bold text-lg">📍 Mapa de Inspecciones</h2><span className="bg-green-100 text-green-800 px-3 py-1 rounded text-xs font-bold border border-green-200">{dataTabla.length} Puntos</span></div>
@@ -409,7 +410,7 @@ export default function DashboardPage() {
             <div className="p-6 overflow-y-auto flex-1 bg-white">
               <div className="flex justify-between items-center mb-6 bg-gray-50 p-4 rounded border">
                 <span className="font-bold text-[#003366]">Seleccionar Mes de Análisis:</span>
-                <input type="month" value={mesDesempeno} onChange={(e) => setMesDesempeno(e.target.value)} className="border p-2 rounded text-sm font-bold" />
+                <input type="month" value={mesDesempeno} onChange={(e) => {setMesDesempeno(e.target.value); setSelectedDateDesempeno(null);}} className="border p-2 rounded text-sm font-bold" />
               </div>
 
               <div className="flex flex-col lg:flex-row gap-8 mb-8">
@@ -432,16 +433,24 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* COL DER: GRILLA DIARIA */}
+                {/* COL DER: GRILLA DIARIA INTERACTIVA */}
                 <div className="flex-1">
-                  <h3 className="font-bold text-[#003366] border-b-2 border-[#FFCC00] pb-2 text-lg mb-4">Grilla de Horas Diarias</h3>
+                  <h3 className="font-bold text-[#003366] border-b-2 border-[#FFCC00] pb-2 text-lg mb-4 flex justify-between">
+                    Grilla de Horas Diarias
+                    <span className="text-xs font-normal text-gray-500">(Clic en fecha para filtrar mapa)</span>
+                  </h3>
                   <div className="border rounded overflow-hidden max-h-[400px] overflow-y-auto">
                     <table className="w-full text-sm text-center">
                       <thead className="bg-gray-50 text-[#003366] sticky top-0 shadow-sm font-bold"><tr><th className="p-3">Fecha</th><th className="p-3">Horas Trabajadas</th><th className="p-3">Horas Acumuladas</th></tr></thead>
                       <tbody>
                         {desempenoDatos.grid.map((g:any) => (
-                          <tr key={g.fecha} className="border-b last:border-0 hover:bg-gray-50">
-                            <td className="p-3 text-gray-600">{g.fecha}</td>
+                          <tr 
+                            key={g.fecha} 
+                            onClick={() => setSelectedDateDesempeno(selectedDateDesempeno === g.dateStr ? null : g.dateStr)}
+                            className={`border-b last:border-0 cursor-pointer transition-colors ${selectedDateDesempeno === g.dateStr ? 'bg-blue-100' : 'hover:bg-gray-50'}`}
+                            title="Clic para filtrar mapa"
+                          >
+                            <td className="p-3 text-gray-600 font-medium">{g.fecha}</td>
                             <td className={`p-3 font-bold ${g.horas === 'F' ? 'text-red-500' : 'text-[#003366]'}`}>{g.horas}</td>
                             <td className="p-3 text-gray-600">{g.acumulado}</td>
                           </tr>
@@ -452,10 +461,31 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* MAPA INFERIOR */}
-              <h3 className="font-bold text-[#003366] border-b-2 border-[#FFCC00] pb-2 text-lg mb-4">Ubicación de Registros ({mesDesempeno})</h3>
+              {/* MAPA INFERIOR CON TOGGLE */}
+              <div className="flex flex-col md:flex-row justify-between items-center border-b-2 border-[#FFCC00] pb-2 mb-4 gap-2">
+                <h3 className="font-bold text-[#003366] text-lg">
+                  Ubicación de Registros {selectedDateDesempeno ? `(${selectedDateDesempeno.split('-').reverse().join('/')})` : `(${mesDesempeno})`}
+                </h3>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer font-bold text-[#003366]">
+                    <input type="radio" name="mapMode" checked={mapModeDesempeno === 'inspecciones'} onChange={() => setMapModeDesempeno('inspecciones')} className="accent-[#003366] w-4 h-4" />
+                    Inspecciones
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer font-bold text-gray-700">
+                    <input type="radio" name="mapMode" checked={mapModeDesempeno === 'jornadas'} onChange={() => setMapModeDesempeno('jornadas')} className="accent-[#003366] w-4 h-4" />
+                    <span className="flex items-center gap-1">
+                      Jornadas (<div className="w-3 h-3 rounded-full bg-green-500 border border-white shadow-sm"></div> Inicio / <div className="w-3 h-3 rounded-full bg-blue-500 border border-white shadow-sm"></div> Fin)
+                    </span>
+                  </label>
+                </div>
+              </div>
               <div className="h-[400px] rounded border overflow-hidden">
-                 <MapComponent inspecciones={desempenoDatos.mapaIns} onVerFicha={(ins:any) => { setModalDesempeno(null); setModalIns(ins); }} />
+                 <MapComponent 
+                   inspecciones={selectedDateDesempeno ? desempenoDatos.mapaIns.filter((i:any) => i.created_at.substring(0,10) === selectedDateDesempeno) : desempenoDatos.mapaIns} 
+                   jornadas={selectedDateDesempeno ? desempenoDatos.mapaShifts.filter((s:any) => s.fecha.substring(0,10) === selectedDateDesempeno) : desempenoDatos.mapaShifts}
+                   mapMode={mapModeDesempeno}
+                   onVerFicha={(ins:any) => { setModalDesempeno(null); setModalIns(ins); }} 
+                 />
               </div>
             </div>
           </div>
