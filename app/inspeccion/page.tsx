@@ -179,26 +179,40 @@ export default function InspeccionPage() {
     );
   };
 
-  const renderRatingTable = (title: string, items: {k:string, l:string}[], options: string[], prefix: string) => (
+  const renderRatingTable = (title: string, items: {k:string, l:string}[], options: string[], prefix: string, hasObservations: boolean = false) => (
     <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm">
       <table className="w-full text-sm text-center bg-white border-collapse">
         <thead className="bg-[#003366] text-white">
           <tr><th colSpan={options.length + 1} className="p-2 font-bold uppercase">{title}</th></tr>
-          <tr className="bg-[#002244] text-xs"><th className="p-2 text-left w-1/2">ITEM</th>{options.map(o => <th key={o} className="p-2">{o}</th>)}</tr>
+          <tr className="bg-[#002244] text-xs">
+            <th className="p-2 text-left w-1/2">ITEM</th>
+            {options.map(o => <th key={o} className="p-2">{o}</th>)}
+          </tr>
         </thead>
         <tbody>
           {items.map((item, idx) => (
             <tr key={item.k} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-              <td className="p-2 text-left border-t border-r text-xs">{item.l}</td>
+              <td className="p-2 text-left border-t border-r border-gray-200 text-xs font-medium">{item.l}</td>
               {options.map(opt => (
-                <td key={opt} className="p-2 border-t" onClick={() => handleChange(`${prefix}_${item.k}`, opt)}>
-                  <input type="radio" name={`${prefix}_${item.k}`} value={opt} checked={formData[`${prefix}_${item.k}`] === opt} onChange={() => handleChange(`${prefix}_${item.k}`, opt)} className="w-4 h-4 cursor-pointer accent-[#003366]" required />
+                <td key={opt} className="p-2 border-t border-gray-200" onClick={() => handleChange(`${prefix}_${item.k}`, opt)}>
+                  <input type="radio" name={`${prefix}_${item.k}`} value={opt} 
+                    checked={formData[`${prefix}_${item.k}`] === opt} 
+                    onChange={() => handleChange(`${prefix}_${item.k}`, opt)}
+                    className="w-4 h-4 cursor-pointer accent-[#003366]" required />
                 </td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
+      {hasObservations && (
+        <div className="p-2 border-t border-[#003366] bg-white flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+          <label className="text-[10px] font-bold text-[#003366] uppercase w-24 text-left pl-1">OBSERVACIONES</label>
+          <input type="text" className="flex-1 border border-gray-300 p-2 rounded text-xs bg-white w-full" 
+            value={formData[`obs_${prefix}`] || ''} 
+            onChange={(e) => handleChange(`obs_${prefix}`, e.target.value)} />
+        </div>
+      )}
     </div>
   );
 
@@ -313,32 +327,101 @@ export default function InspeccionPage() {
               {(tipoInspeccion === '1-INSPECTOR EN CALLE' || subtipoPersonal === 'Permanente') && (
                 <>
                   {renderSearchFields()}
-                  {renderRatingTable("Limpieza de la Unidad", [{k:'int', l:'Interior'}, {k:'ext', l:'Exterior'}, {k:'cab', l:'Cabezales'}, {k:'bano', l:'Baño'}, {k:'ac', l:'A/C - CALEF.'}], ['1','2','3','4','5','N/C'], "limp")}
-                  {renderRatingTable("Evaluación del Conductor", [{k:'horarios', l:'Cumplimiento Horarios'}, {k:'uniforme', l:'Uniforme'}, {k:'atencion', l:'Atención al Usuario'}, {k:'cond', l:'Conducción'}], ['1','2','3','4','5','N/C'], "eval")}
-                    <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm text-sm text-center">
-                      <div className="bg-[#003366] text-white p-2 font-bold uppercase">Equipamiento y Sistemas</div>
-                      <div className="grid grid-cols-2 bg-gray-50 p-2 gap-2 text-left">
-                        <div className="font-bold self-center text-xs text-[#003366]">Micronauta</div>
-                        <div><select className="w-full border p-1 rounded bg-white" value={formData.micron_existe || ''} onChange={(e)=>handleChange('micron_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
-                        
-                        <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo Micronauta</div>
-                        <div><select className="w-full border p-1 rounded bg-white" value={formData.micron_func || ''} onChange={(e)=>handleChange('micron_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
-                        
-                        <div className="font-bold self-center text-xs text-[#003366]">Cant. Pasajeros Micronauta</div>
-                        <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.micron_pasajeros || ''} onChange={(e)=>handleChange('micron_pasajeros',e.target.value)} /></div>
-                        
-                        <div className="col-span-2 border-t my-1 border-gray-200"></div>
+                  
+                  {/* ACLARACIÓN DE CRITERIOS */}
+                  <div className="bg-blue-50 border-l-4 border-blue-600 p-4 mb-6 rounded shadow-sm text-xs text-[#003366]">
+                    <strong className="block mb-1 text-sm uppercase">Criterios de Calificación:</strong>
+                    <ul className="list-disc pl-4 space-y-1">
+                      <li><b>1 - 2:</b> No Permitido - Revisión de acción del Comité</li>
+                      <li><b>3:</b> Observado - Acción de Seguimiento</li>
+                      <li><b>4 - 5:</b> Aceptable</li>
+                    </ul>
+                  </div>
 
-                        <div className="font-bold self-center text-xs text-[#003366]">SUBE</div>
-                        <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_existe || ''} onChange={(e)=>handleChange('sube_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
-                        
-                        <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo SUBE</div>
-                        <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_func || ''} onChange={(e)=>handleChange('sube_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
-                                       
-                        <div className="font-bold self-center text-xs text-[#003366]">Inspecciones SUBE realizadas</div>
-                        <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_inspecciones || ''} onChange={(e)=>handleChange('sube_inspecciones',e.target.value)} /></div>
-                      </div>
+                  {renderRatingTable("Limpieza de la Unidad", [{k:'int', l:'Interior'}, {k:'ext', l:'Exterior'}, {k:'cab', l:'Cabezales'}, {k:'bano', l:'Baño'}, {k:'ac', l:'A/C - CALEF.'}], ['1','2','3','4','5','N/C'], "limp")}
+                  
+                  {/* EVALUACIÓN DEL CONDUCTOR (Actualizado) */}
+                  {renderRatingTable("Evaluación del Conductor", [
+                    {k:'horarios', l:'Cumplimiento Horarios'}, 
+                    {k:'uniforme', l:'Uniforme'}, 
+                    {k:'atencion', l:'Atención al Usuario'}
+                  ], ['1','2','3','4','5','N/C'], "eval")}
+
+                  {/* NUEVA SECCIÓN: CONDUCCIÓN */}
+                  <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm text-sm">
+                    <div className="bg-[#003366] text-white p-2 font-bold uppercase">Conducción</div>
+                    <div className="bg-white p-4 space-y-4">
+                      {[
+                        { k: 'ascenso_descenso', l: 'Ascenso / Descenso de pasajeros' },
+                        { k: 'exceso_velocidad', l: 'Excesos de velocidad' },
+                        { k: 'marcha', l: 'Inicio y fin de marcha (Cambios)' },
+                        { k: 'adelanto', l: 'Adelanto' }
+                      ].map((item) => (
+                        <div key={item.k} className="border-b border-gray-200 pb-3 last:border-0 last:pb-0">
+                           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
+                             <label className="font-bold text-[#003366] text-xs">{item.l}</label>
+                             <select className="border border-gray-300 p-2 rounded sm:w-1/3 text-xs bg-white font-bold" 
+                               value={formData[`cond_${item.k}`] || ''} 
+                               onChange={(e) => handleChange(`cond_${item.k}`, e.target.value)} required>
+                               <option value="">--</option>
+                               <option value="1">1</option>
+                               <option value="2">2</option>
+                               <option value="3">3</option>
+                               <option value="4">4</option>
+                               <option value="5">5</option>
+                               <option value="N/C">N/C</option>
+                             </select>
+                           </div>
+                           <div className="flex gap-2 items-center">
+                             <label className="text-[10px] font-bold text-[#003366] uppercase w-28">OBSERVACIONES:</label>
+                             <input type="text" className="flex-1 border border-gray-300 p-2 rounded text-xs bg-white" 
+                               value={formData[`obs_cond_${item.k}`] || ''} 
+                               onChange={(e) => handleChange(`obs_cond_${item.k}`, e.target.value)} />
+                           </div>
+                        </div>
+                      ))}
                     </div>
+                  </div>
+
+                  {/* NUEVA SECCIÓN: NORMAS DE TRÁNSITO */}
+                  {renderRatingTable("NORMAS DE TRÁNSITO", [
+                    {k:'frenadas', l:'Frenadas Bruscas'},
+                    {k:'cinturon', l:'Cinturón de Seguridad'},
+                    {k:'semaforos', l:'Respeta Semáforos'},
+                    {k:'maniobras', l:'Maniobras Agresivas'},
+                    {k:'luces', l:'Uso de luces'},
+                    {k:'bocina', l:'Uso de bocina'},
+                    {k:'paso', l:'Cede el paso'},
+                    {k:'linea', l:'Traspaso línea amarilla'}
+                  ], ['SI', 'NO'], "normas_transito", true)}
+
+                  <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm text-sm text-center">
+                    <div className="bg-[#003366] text-white p-2 font-bold uppercase">Equipamiento y Sistemas</div>
+                    <div className="grid grid-cols-2 bg-gray-50 p-2 gap-2 text-left">
+                      <div className="font-bold self-center text-xs text-[#003366]">Micronauta</div>
+                      <div><select className="w-full border p-1 rounded bg-white" value={formData.micron_existe || ''} onChange={(e)=>handleChange('micron_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
+                      
+                      <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo Micronauta</div>
+                      <div><select className="w-full border p-1 rounded bg-white" value={formData.micron_func || ''} onChange={(e)=>handleChange('micron_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
+                      
+                      <div className="font-bold self-center text-xs text-[#003366]">Cant. Pasajeros Micronauta</div>
+                      <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.micron_pasajeros || ''} onChange={(e)=>handleChange('micron_pasajeros',e.target.value)} /></div>
+                      
+                      <div className="col-span-2 border-t my-1 border-gray-200"></div>
+
+                      <div className="font-bold self-center text-xs text-[#003366]">SUBE</div>
+                      <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_existe || ''} onChange={(e)=>handleChange('sube_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
+                      
+                      <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo SUBE</div>
+                      <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_func || ''} onChange={(e)=>handleChange('sube_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
+                      
+                      <div className="font-bold self-center text-xs text-[#003366]">Cant. de Func. Equipo SUBE</div>
+                      <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_cant_func || ''} onChange={(e)=>handleChange('sube_cant_func',e.target.value)} /></div>
+                      
+                      <div className="font-bold self-center text-xs text-[#003366]">Inspecciones SUBE realizadas</div>
+                      <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_inspecciones || ''} onChange={(e)=>handleChange('sube_inspecciones',e.target.value)} /></div>
+                    </div>
+                  </div>
                 </>
               )}
 
