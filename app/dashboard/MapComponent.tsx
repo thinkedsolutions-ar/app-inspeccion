@@ -91,5 +91,4 @@ export default function MapComponent({ inspecciones, onVerFicha }: any) {
       </MarkerClusterGroup>
     </MapContainer>
   );
->>>>>>> 0438c4fafff388915f2d5af92076f9303c639186
 }
