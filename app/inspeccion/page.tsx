@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import FichaVisualizador from '@/components/FichaVisualizador';
 
 export default function InspeccionPage() {
   const [user, setUser] = useState<any>(null);
@@ -526,30 +527,50 @@ export default function InspeccionPage() {
 
       {/* MODAL SEGUIMIENTO INSPECTOR */}
       {modalSeg && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[70]">
-          <div className="bg-white w-full max-w-lg rounded-lg shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="bg-[#003366] text-white p-4 flex justify-between items-center rounded-t-lg">
-              <h2 className="font-bold">Seguimiento: {modalSeg.tipo}</h2>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[70] backdrop-blur-sm">
+          <div className="bg-[#f4f7f9] w-full max-w-lg rounded-xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="bg-[#003366] text-white p-4 flex justify-between items-center rounded-t-lg shrink-0">
+              <h2 className="font-bold text-sm">Seguimiento: {modalSeg.tipo}</h2>
               <button onClick={() => setModalSeg(null)} className="text-2xl leading-none">&times;</button>
             </div>
             
             <div className="p-4 overflow-y-auto flex-1 bg-gray-50 space-y-4">
-              <div className="bg-white p-3 rounded border shadow-sm text-xs space-y-2">
-                <div className="font-bold text-[#003366] border-b pb-1 mb-2">📋 Historial de Acciones</div>
-                {historialChat.length === 0 ? <p className="text-gray-400 italic">Sin comentarios previos.</p> : (
+              
+              {/* NUEVO: Reconstrucción del reporte con marcas rojas para el inspector */}
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="font-bold text-[#003366] text-xs uppercase border-b pb-2 mb-3">📋 Detalles del Reporte</h3>
+                <FichaVisualizador ins={modalSeg} />
+              </div>
+
+              {/* NUEVO: Fotos de respaldo si existen */}
+              {modalSeg.fotos && modalSeg.fotos.length > 0 && (
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                  <h3 className="font-bold text-[#003366] text-xs uppercase border-b pb-2 mb-3">Fotos de Respaldo</h3>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {modalSeg.fotos.map((url:string, i:number) => (
+                      <a key={i} href={url} target="_blank"><img src={url} className="h-20 rounded border" /></a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* HISTORIAL DE ACCIONES (CHAT) */}
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-2">
+                <div className="font-bold text-[#003366] text-xs border-b pb-1 mb-2">💬 Historial de Acciones</div>
+                {historialChat.length === 0 ? <p className="text-gray-400 italic text-xs">Sin comentarios previos.</p> : (
                   historialChat.map(h => (
-                    <div key={h.id} className="border-l-2 border-blue-400 pl-2 py-1">
+                    <div key={h.id} className="border-l-2 border-blue-400 pl-2 py-1 text-xs">
                       <div className="text-[10px] text-gray-500"><b>{h.usuario}</b> - {new Date(h.created_at).toLocaleString()}</div>
-                      <div className="text-sm">{h.accion}</div>
+                      <div className="text-xs text-gray-700">{h.accion}</div>
                     </div>
                   ))
                 )}
               </div>
             </div>
 
-            <div className="p-4 bg-white border-t rounded-b-lg space-y-2">
-              <textarea className="w-full border p-2 rounded text-sm" rows={2} placeholder="Escribir nuevo comentario..." value={nuevoComentario} onChange={(e) => setNewComentario(e.target.value)}></textarea>
-              <button onClick={enviarComentario} className="w-full bg-green-600 text-white font-bold p-2 rounded" disabled={loading}>AÑADIR COMENTARIO</button>
+            <div className="p-4 bg-white border-t rounded-b-lg space-y-2 shrink-0">
+              <textarea className="w-full border p-2 rounded text-sm bg-gray-50" rows={2} placeholder="Escribir nuevo comentario..." value={nuevoComentario} onChange={(e) => setNewComentario(e.target.value)}></textarea>
+              <button onClick={enviarComentario} className="w-full bg-green-600 text-white font-bold p-3 rounded-lg text-xs" disabled={loading}>AÑADIR COMENTARIO</button>
             </div>
           </div>
         </div>
