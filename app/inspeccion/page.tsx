@@ -47,11 +47,18 @@ export default function InspeccionPage() {
 
   const fetchCatalogos = async () => {
     const [resCond, resUni, resServ] = await Promise.all([
-      supabase.from('conductores').select('nombre').eq('activo', true).order('nombre'),
+      supabase.from('conductores').select('*').eq('activo', true),
       supabase.from('unidades').select('numero').eq('activo', true).order('numero'),
       supabase.from('servicios').select('nombre').eq('activo', true).order('nombre')
     ]);
-    setListas({ conductores: resCond.data || [], unidades: resUni.data || [], servicios: resServ.data || [] });
+    
+    // Concatenar y ordenar conductores "al vuelo"
+    const condFormatted = (resCond.data || []).map(c => ({
+      ...c,
+      fullName: `${c.legajo || ''} - ${c.apellido || ''}, ${c.nombre || ''}`
+    })).sort((a, b) => a.fullName.localeCompare(b.fullName));
+
+    setListas({ conductores: condFormatted, unidades: resUni.data || [], servicios: resServ.data || [] });
   };
 
   const fetchPendientes = async (inspectorNombre: string) => {
@@ -114,7 +121,7 @@ export default function InspeccionPage() {
     e.preventDefault();
     const esAspirante = tipoInspeccion === '3-SEGUIMIENTO DE PERSONAL' && subtipoPersonal === 'Aspirante';
     if (!esAspirante && formData.conductor) {
-      const existe = listas.conductores.find((c:any) => c.nombre === formData.conductor);
+      cconst existe = listas.conductores.find((c:any) => c.fullName === formData.conductor);
       if (!existe && !tipoInspeccion.includes('TEMAS') && !tipoInspeccion.includes('DESCANSO')) {
         alert("Atención: Debe seleccionar un conductor válido de la lista."); return;
       }
@@ -151,7 +158,7 @@ export default function InspeccionPage() {
     const esAspirante = tipoInspeccion === '3-SEGUIMIENTO DE PERSONAL' && subtipoPersonal === 'Aspirante';
     return (
       <div className="space-y-4 mb-6 border-b pb-6">
-        <datalist id="list-conductores">{listas.conductores.map((c:any) => <option key={c.nombre} value={c.nombre} />)}</datalist>
+        <datalist id="list-conductores">{listas.conductores.map((c:any) => <option key={c.id} value={c.fullName} />)}</datalist>
         <datalist id="list-unidades">{listas.unidades.map((u:any) => <option key={u.numero} value={u.numero} />)}</datalist>
         <datalist id="list-servicios">{listas.servicios.map((s:any) => <option key={s.nombre} value={s.nombre} />)}</datalist>
 

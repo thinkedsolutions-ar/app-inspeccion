@@ -49,7 +49,7 @@ export default function DashboardPage() {
   // Estados ABM y Flota (MODIFICADOS PARA EDICIÓN)
   const [abmTab, setAbmTab] = useState('conductores');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formCond, setFormCond] = useState({ legajo: '', nombres: '', apellido: '', telefono: '' });
+  const [formCond, setFormCond] = useState({ legajo: '', nombre: '', apellido: '', telefono: '' });
   const [formUni, setFormUni] = useState({ numero: '' });
   const [formServ, setFormServ] = useState({ nombre: '', temporada: '' });
   const [modalDriver, setModalDriver] = useState<any>(null);
@@ -149,7 +149,7 @@ export default function DashboardPage() {
 
   const editItem = (item: any, type: string) => {
     setEditingId(item.id);
-    if (type === 'conductores') setFormCond({ legajo: item.legajo || '', nombres: item.nombres || '', apellido: item.apellido || '', telefono: item.telefono || '' });
+    if(type === 'conductores') payload = data.filter(r=>r.legajo).map(r => ({ legajo: r.legajo, apellido: r.apellido, telefono: r.telefono, nombre: r.nombre, activo: true }));
     if (type === 'unidades') setFormUni({ numero: item.numero || '' });
     if (type === 'servicios') setFormServ({ nombre: item.nombre || '', temporada: item.temporada || '' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -158,9 +158,8 @@ export default function DashboardPage() {
   const handleSaveABM = async (e: any, type: string) => {
     e.preventDefault();
     if(type === 'conductores') {
-      const full = `${formCond.legajo} - ${formCond.apellido}, ${formCond.nombres}`;
-      if (editingId) await supabase.from('conductores').update({ legajo: formCond.legajo, nombres: formCond.nombres, apellido: formCond.apellido, telefono: formCond.telefono, nombre: full }).eq('id', editingId);
-      else await supabase.from('conductores').insert([{ legajo: formCond.legajo, nombres: formCond.nombres, apellido: formCond.apellido, telefono: formCond.telefono, nombre: full, activo: true }]);
+      if (editingId) await supabase.from('conductores').update({ legajo: formCond.legajo, nombre: formCond.nombre, apellido: formCond.apellido, telefono: formCond.telefono }).eq('id', editingId);
+      else await supabase.from('conductores').insert([{ legajo: formCond.legajo, nombre: formCond.nombre, apellido: formCond.apellido, telefono: formCond.telefono, activo: true }]);
     }
     if(type === 'unidades') {
       if (editingId) await supabase.from('unidades').update({ numero: formUni.numero }).eq('id', editingId);
@@ -400,7 +399,7 @@ export default function DashboardPage() {
                     </div>
                     <form onSubmit={(e) => handleSaveABM(e, abmTab)} className="flex gap-4 items-end flex-wrap">
                       {abmTab === 'conductores' && (
-                        <><div className="flex-1 min-w-[100px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Legajo</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formCond.legajo} onChange={e=>setFormCond({...formCond, legajo: e.target.value})} required/></div><div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombres</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formCond.nombres} onChange={e=>setFormCond({...formCond, nombres: e.target.value})} required/></div><div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Apellidos</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formCond.apellido} onChange={e=>setFormCond({...formCond, apellido: e.target.value})} required/></div><div className="flex-1 min-w-[120px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Teléfono</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formCond.telefono} onChange={e=>setFormCond({...formCond, telefono: e.target.value})} /></div></>
+                        <><div className="flex-1 min-w-[100px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Legajo</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formCond.legajo} onChange={e=>setFormCond({...formCond, legajo: e.target.value})} required/></div><div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombres</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formCond.nombre} onChange={e=>setFormCond({...formCond, nombres: e.target.value})} required/></div><div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Apellidos</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formCond.apellido} onChange={e=>setFormCond({...formCond, apellido: e.target.value})} required/></div><div className="flex-1 min-w-[120px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Teléfono</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formCond.telefono} onChange={e=>setFormCond({...formCond, telefono: e.target.value})} /></div></>
                       )}
                       {abmTab === 'unidades' && <div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Número de Unidad</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formUni.numero} onChange={e=>setFormUni({numero: e.target.value})} required/></div>}
                       {abmTab === 'servicios' && (
@@ -419,7 +418,7 @@ export default function DashboardPage() {
                         {(abmTab === 'conductores' ? catConductores : (abmTab === 'unidades' ? catUnidades : catServicios)).map(item => (
                            <tr key={item.id} className={`border-b border-gray-50 hover:bg-gray-50/80 transition-colors ${!item.activo ? 'opacity-50 grayscale' : ''}`}>
                              {abmTab === 'conductores' ? (
-                               <><td className="p-4"><div className="font-bold text-[#0B132B]">{item.apellido}, {item.nombres}</div><div className="text-[10px] font-mono text-gray-500">LEG: {item.legajo}</div></td><td className="p-4 text-center text-gray-600">{item.telefono || '-'}</td></>
+                               <><td className="p-4"><div className="font-bold text-[#0B132B]">{item.apellido}, {item.nombre}</div><div className="text-[10px] font-mono text-gray-500">LEG: {item.legajo}</div></td><td className="p-4 text-center text-gray-600">{item.telefono || '-'}</td></>
                              ) : (
                                abmTab === 'servicios' ? <><td className="p-4 font-bold text-[#0B132B]">{item.nombre}</td><td className="p-4 text-center text-gray-600 font-bold">{item.temporada || '-'}</td></> : <td className="p-4 font-bold text-[#0B132B]">{item.numero}</td>
                              )}
