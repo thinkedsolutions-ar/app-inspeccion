@@ -566,14 +566,55 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* MODAL FICHA DE INSPECCION INDIVIDUAL (Ya Existente) */}
+      {/* MODAL FICHA (Reutilizable para Reportes y Mapa) */}
       {modalIns && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[110] backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
           <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl flex flex-col h-[90vh]">
-            <div className="bg-[#0B132B] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0"><h2 className="font-bold text-lg">Inspección: {modalIns.id}</h2><button onClick={() => setModalIns(null)} className="text-3xl leading-none hover:text-red-400">&times;</button></div>
+            <div className="bg-[#003366] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0">
+              <h2 className="font-bold text-lg">Inspección: {modalIns.id}</h2>
+              <button onClick={() => setModalIns(null)} className="text-3xl leading-none hover:text-red-400">&times;</button>
+            </div>
+            
             <div className="p-6 overflow-y-auto flex-1 bg-gray-50">
-              {/* Llamamos directamente al visualizador que ahora ocupa todo el ancho disponible */}
+              {/* Visualizador de Ficha Completo y a Ancho Completo */}
               <FichaVisualizador ins={modalIns} />
+
+              {/* FOTOS */}
+              {modalIns.fotos && modalIns.fotos.length > 0 && (
+                <div className="mb-6 mt-6">
+                  <h3 className="font-bold text-[#003366] border-b pb-2 mb-3">Fotos</h3>
+                  <div className="flex gap-4 overflow-x-auto pb-2">
+                    {modalIns.fotos.map((url:string, i:number) => (
+                      <a key={i} href={url} target="_blank"><img src={url} className="h-32 rounded border hover:scale-105 transition-transform" /></a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* SEGUIMIENTO */}
+              <div className="bg-white p-4 rounded border-t-4 border-[#FFCC00] shadow-sm mt-6">
+                <h3 className="font-bold text-[#003366] flex items-center gap-2 mb-4">📝 Seguimiento y Acciones</h3>
+                <div className="space-y-2 mb-4 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded border">
+                  {followups.filter(f => f.inspection_id === modalIns.id).length === 0 ? <p className="text-sm text-gray-400 italic">Sin acciones registradas.</p> : (
+                    followups.filter(f => f.inspection_id === modalIns.id).map(h => (
+                      <div key={h.id} className="border-l-4 border-blue-400 pl-3 py-1 bg-white shadow-sm">
+                        <div className="text-[10px] text-gray-500"><b>{h.usuario}</b> - {new Date(h.created_at).toLocaleString()}</div>
+                        <div className={`text-sm ${h.accion.includes('[CERRADO]') ? 'text-red-600 font-bold' : ''}`}>{h.accion}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {!getInspectionStatus(modalIns.id).includes('CERRADO') && (
+                  <div className="space-y-3">
+                    <textarea className="w-full border p-3 rounded text-sm bg-gray-50" rows={2} placeholder="Nuevo comentario..." value={nuevoComentario} onChange={(e) => setNewComentario(e.target.value)}></textarea>
+                    <div className="flex gap-2">
+                      <button onClick={handleAddComentario} className="flex-1 bg-green-600 text-white font-bold p-3 rounded hover:bg-green-700" disabled={loading}>AÑADIR COMENTARIO</button>
+                      <button onClick={handleCerrarTema} className="flex-1 bg-red-600 text-white font-bold p-3 rounded hover:bg-red-700" disabled={loading}>🔒 MARCAR CERRADO</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
