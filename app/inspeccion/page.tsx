@@ -537,10 +537,7 @@ export default function InspeccionPage() {
             <div className="p-4 overflow-y-auto flex-1 bg-gray-50 space-y-4">
               
               {/* NUEVO: Reconstrucción del reporte con marcas rojas para el inspector */}
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-[#003366] text-xs uppercase border-b pb-2 mb-3">📋 Detalles del Reporte</h3>
-                <FichaVisualizador ins={modalSeg} />
-              </div>
+              <FichaVisualizador ins={modalSeg} />
 
               {/* NUEVO: Fotos de respaldo si existen */}
               {modalSeg.fotos && modalSeg.fotos.length > 0 && (
