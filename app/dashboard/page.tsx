@@ -133,7 +133,7 @@ export default function DashboardPage() {
 
   // --- LÓGICAS PANEL DE FLOTA (FALTAS Y ALERTAS) ---
   const getHallazgos = (form: any) => {
-    const fallas = [];
+    const fallas: string[] = [];
     if (!form) return fallas;
     if (['1','2','3'].includes(form.eval_horarios)) fallas.push('Incumplimiento Horarios');
     if (['1','2','3'].includes(form.eval_uniforme)) fallas.push('Uniforme incorrecto');
