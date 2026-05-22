@@ -47,9 +47,9 @@ export default function InspeccionPage() {
 
   const fetchCatalogos = async () => {
     const [resCond, resUni, resServ] = await Promise.all([
-      supabase.from('conductores').select('nombre').order('nombre'),
-      supabase.from('unidades').select('numero').order('numero'),
-      supabase.from('servicios').select('nombre').order('nombre')
+      supabase.from('conductores').select('nombre').eq('activo', true).order('nombre'),
+      supabase.from('unidades').select('numero').eq('activo', true).order('numero'),
+      supabase.from('servicios').select('nombre').eq('activo', true).order('nombre')
     ]);
     setListas({ conductores: resCond.data || [], unidades: resUni.data || [], servicios: resServ.data || [] });
   };
@@ -343,7 +343,7 @@ export default function InspeccionPage() {
                   {/* EVALUACIÓN DEL CONDUCTOR (Actualizado) */}
                   {renderRatingTable("Evaluación del Conductor", [
                     {k:'horarios', l:'Cumplimiento Horarios'}, 
-                    {k:'uniforme', l:'Uniforme'}, 
+                    {k:'uniforme', l:'Uniforme - Aseo'}, 
                     {k:'atencion', l:'Atención al Usuario'}
                   ], ['1','2','3','4','5','N/C'], "eval")}
 

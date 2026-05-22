@@ -6,6 +6,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Toolti
 import { Bar, Line } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import dynamic from 'next/dynamic';
+import Papa from 'papaparse';
 
 const MapComponent = dynamic(() => import('./MapaInteract'), { ssr: false });
 
@@ -19,7 +20,12 @@ export default function DashboardPage() {
   const [inspecciones, setInspecciones] = useState<any[]>([]);
   const [followups, setFollowups] = useState<any[]>([]);
   const [usuarios, setUsuarios] = useState<any[]>([]);
-  const [shifts, setShifts] = useState<any[]>([]); // NUEVO: Para calcular horas
+  const [shifts, setShifts] = useState<any[]>([]);
+  
+  // Catálogos ABM
+  const [catConductores, setCatConductores] = useState<any[]>([]);
+  const [catUnidades, setCatUnidades] = useState<any[]>([]);
+  const [catServicios, setCatServicios] = useState<any[]>([]);
   
   const [fechaInicio, setFechaInicio] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; });
   const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
@@ -36,13 +42,18 @@ export default function DashboardPage() {
   const [selectedInspectorChart, setSelectedInspectorChart] = useState<string | null>(null);
   const [selectedTypeChart, setSelectedTypeChart] = useState<string | null>(null);
 
-  // NUEVOS ESTADOS: Desempeño
+  // Estados Desempeño
   const [modalDesempeno, setModalDesempeno] = useState<string | null>(null);
-  const [mesDesempeno, setMesDesempeno] = useState(() => {
-    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  });
+  const [mesDesempeno, setMesDesempeno] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
   const [mapaVista, setMapaVista] = useState<'inspecciones' | 'jornadas'>('inspecciones');
   const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(null);
+
+  // Estados ABM y Flota
+  const [abmTab, setAbmTab] = useState('conductores');
+  const [formCond, setFormCond] = useState({ legajo: '', nombre_pila: '', apellido: '', telefono: '' });
+  const [formUni, setFormUni] = useState({ numero: '' });
+  const [formServ, setFormServ] = useState({ nombre: '' });
+  const [modalDriver, setModalDriver] = useState<any>(null);
 
   useEffect(() => {
     const session = localStorage.getItem('buttini_user');
@@ -50,10 +61,9 @@ export default function DashboardPage() {
     const userData = JSON.parse(session);
     if (userData.rol !== 'Admin') { window.location.href = '/inspeccion'; return; }
     setAdminUser(userData);
-    fetchData(); fetchUsers();
+    fetchData(); fetchUsers(); fetchCatalogosAdmin();
   },[]);
 
-  // SE MODIFICÓ ESTA FUNCIÓN: Se agregó supabase.from('shifts')...
   const fetchData = async () => {
     setLoading(true);
     const dYearAgo = new Date(); dYearAgo.setFullYear(dYearAgo.getFullYear() - 1);
@@ -65,39 +75,37 @@ export default function DashboardPage() {
     setInspecciones(resIns.data || []); setFollowups(resFol.data || []); setShifts(resShifts.data || []); setLoading(false);
   };
 
-  const fetchUsers = async () => {
-    const { data } = await supabase.from('users').select('*').order('nombre');
-    if (data) setUsuarios(data);
+  const fetchUsers = async () => { const { data } = await supabase.from('users').select('*').order('nombre'); if (data) setUsuarios(data); };
+
+  const fetchCatalogosAdmin = async () => {
+    const [resCond, resUni, resServ] = await Promise.all([
+      supabase.from('conductores').select('*').order('nombre'),
+      supabase.from('unidades').select('*').order('numero'),
+      supabase.from('servicios').select('*').order('nombre')
+    ]);
+    setCatConductores(resCond.data || []); setCatUnidades(resUni.data || []); setCatServicios(resServ.data || []);
   };
 
+  // --- LÓGICAS EXISTENTES (USUARIOS Y SEGUIMIENTO) ---
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     const { error } = await supabase.from('users').insert([newUser]);
-    if (error) alert("Error: " + error.message);
-    else { alert("Usuario creado"); setNewUser({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' }); fetchUsers(); }
+    if (error) alert("Error: " + error.message); else { alert("Usuario creado"); setNewUser({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' }); fetchUsers(); }
   };
-
-  const handleDeleteUser = async (id: string, username: string) => {
-    if (confirm(`¿Eliminar al usuario ${username}?`)) { await supabase.from('users').delete().eq('id', id); fetchUsers(); }
-  };
-
+  const handleDeleteUser = async (id: string, username: string) => { if (confirm(`¿Eliminar al usuario ${username}?`)) { await supabase.from('users').delete().eq('id', id); fetchUsers(); } };
   const handleResetPassword = async (id: string, username: string) => {
     const newPass = prompt(`Ingrese la NUEVA CONTRASEÑA para ${username}:`);
     if (!newPass) return;
     const { error } = await supabase.from('users').update({ password: newPass }).eq('id', id);
     if (error) alert("Error al cambiar clave"); else alert("Contraseña actualizada exitosamente.");
   };
-
   const handleAddComentario = async () => {
-    if (!nuevoComentario.trim()) return;
-    setLoading(true);
+    if (!nuevoComentario.trim()) return; setLoading(true);
     await supabase.from('followups').insert([{ inspection_id: modalIns.id, usuario: adminUser.nombre, accion: nuevoComentario }]);
     setNewComentario(''); await fetchData(); setLoading(false);
   };
-
   const handleCerrarTema = async () => {
-    if(!confirm("¿Cerrar seguimiento?")) return;
-    setLoading(true);
+    if(!confirm("¿Cerrar seguimiento?")) return; setLoading(true);
     await supabase.from('followups').insert([{ inspection_id: modalIns.id, usuario: adminUser.nombre, accion: '[CERRADO] El tema ha sido cerrado por el administrador.' }]);
     await fetchData(); setModalIns(null); setLoading(false);
   };
@@ -109,6 +117,7 @@ export default function DashboardPage() {
     return 'ABIERTO';
   };
 
+  // --- PROCESAMIENTO GENERAL ---
   const dataTabla = inspecciones.filter(ins => {
     const dateOk = ins.created_at >= `${fechaInicio}T00:00:00Z` && ins.created_at <= `${fechaFin}T23:59:59Z`;
     if (!dateOk) return false;
@@ -122,17 +131,96 @@ export default function DashboardPage() {
   const inspectoresUnicos = Array.from(new Set(inspecciones.map(i => i.inspector))).sort();
   const tiposUnicos = Array.from(new Set(inspecciones.map(i => i.tipo))).sort();
 
-  const last12Months = Array.from({length: 12}, (_, i) => { const d = new Date(); d.setMonth(d.getMonth() - (11 - i)); return d.toLocaleString('es-ES', { month: 'short', year: '2-digit' }); });
-  const trendData = new Array(12).fill(0);
-  inspecciones.forEach(ins => {
-    const d = new Date(ins.created_at);
-    const idx = last12Months.indexOf(d.toLocaleString('es-ES', { month: 'short', year: '2-digit' }));
-    if (idx >= 0) trendData[idx]++;
+  // --- LÓGICAS PANEL DE FLOTA (FALTAS Y ALERTAS) ---
+  const getHallazgos = (form: any) => {
+    const fallas = [];
+    if (!form) return fallas;
+    if (['1','2','3'].includes(form.eval_horarios)) fallas.push('Incumplimiento Horarios');
+    if (['1','2','3'].includes(form.eval_uniforme)) fallas.push('Uniforme incorrecto');
+    if (['1','2','3'].includes(form.eval_atencion)) fallas.push('Mala atención al usuario');
+    if (['1','2','3'].includes(form.cond_ascenso_descenso)) fallas.push('Ascenso/Descenso indebido');
+    if (['1','2','3'].includes(form.cond_marcha)) fallas.push('Inicio/Fin de marcha brusca');
+    if (['1','2','3'].includes(form.cond_adelanto)) fallas.push('Maniobra de adelanto indebida');
+    if (form.cond_exceso_velocidad === 'SI') fallas.push('Exceso de velocidad');
+    if (form.normas_transito_frenadas === 'SI') fallas.push('Frenadas bruscas');
+    if (form.normas_transito_maniobras === 'SI') fallas.push('Maniobras agresivas');
+    if (form.normas_transito_linea === 'SI') fallas.push('Traspaso línea amarilla');
+    if (form.normas_transito_cinturon === 'NO') fallas.push('No utiliza cinturón de seguridad');
+    if (form.normas_transito_semaforos === 'NO') fallas.push('No respeta semáforos');
+    if (form.normas_transito_luces === 'NO') fallas.push('Uso de luces incorrecto');
+    if (form.normas_transito_bocina === 'NO') fallas.push('Mal uso de bocina');
+    if (form.normas_transito_paso === 'NO') fallas.push('No cede el paso');
+    return fallas;
+  };
+
+  const flotaInspecciones = dataTabla.filter(ins => ins.tipo.startsWith('1-') || ins.tipo.includes('Permanente'));
+  const driverStats: Record<string, any> = {};
+  const urgentInspections: any[] = [];
+  
+  flotaInspecciones.forEach(ins => {
+    const form = ins.datos_formulario || {};
+    const cond = form.conductor;
+    if (!cond) return;
+    const fallas = getHallazgos(form);
+    if (!driverStats[cond]) driverStats[cond] = { faltas: 0, unidad: form.unidad || '-', count: 0, fallasDetalle: [] };
+    
+    driverStats[cond].count++;
+    driverStats[cond].faltas += fallas.length;
+    driverStats[cond].unidad = form.unidad || driverStats[cond].unidad;
+    
+    if (fallas.length > 0) urgentInspections.push({ ...ins, hallazgos: fallas });
   });
 
-  const conteoInspectores: Record<string, number> = {};
-  dataTabla.forEach(ins => { conteoInspectores[ins.inspector] = (conteoInspectores[ins.inspector] || 0) + 1; });
+  const rankingConductores = Object.entries(driverStats).map(([nombre, data]:any) => ({ nombre, ...data })).sort((a,b) => b.faltas - a.faltas);
+  const activosCondCount = catConductores.filter(c => c.activo).length;
+  const pendientesCount = activosCondCount - rankingConductores.length;
+  const scoreFlota = rankingConductores.length > 0 ? Math.max(0, 100 - Math.round((urgentInspections.length / flotaInspecciones.length) * 100)) : 100;
 
+  // --- LÓGICA ABM Y CSV ---
+  const toggleActivo = async (table: string, id: string, current: boolean) => {
+    await supabase.from(table).update({ activo: !current }).eq('id', id);
+    fetchCatalogosAdmin();
+  };
+
+  const downloadCSVTemplate = (type: string) => {
+    let csv = '';
+    if(type==='conductores') csv = 'legajo,nombre_pila,apellido,telefono\n101,Juan,Perez,2604123456';
+    if(type==='unidades') csv = 'numero\n145\n146';
+    if(type==='servicios') csv = 'nombre\n540 - Ciudad\n570 - Directo';
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `plantilla_${type}.csv`; a.click();
+  };
+
+  const handleCSVUpload = (e: any, type: string) => {
+    const file = e.target.files[0]; if(!file) return;
+    Papa.parse(file, { header: true, complete: async (res) => {
+      const data = res.data as any[];
+      let payload = [];
+      if(type === 'conductores') payload = data.filter(r=>r.legajo).map(r => ({ legajo: r.legajo, apellido: r.apellido, telefono: r.telefono, nombre: `${r.legajo} - ${r.nombre_pila} ${r.apellido}`, activo: true }));
+      if(type === 'unidades') payload = data.filter(r=>r.numero).map(r => ({ numero: r.numero, activo: true }));
+      if(type === 'servicios') payload = data.filter(r=>r.nombre).map(r => ({ nombre: r.nombre, activo: true }));
+      const col = type === 'conductores' ? 'nombre' : (type === 'unidades' ? 'numero' : 'nombre');
+      await supabase.from(type).upsert(payload, { onConflict: col });
+      alert(`Importación completada para ${type}`); fetchCatalogosAdmin();
+    }});
+  };
+
+  const handleSaveABM = async (e: any, type: string) => {
+    e.preventDefault();
+    if(type === 'conductores') await supabase.from('conductores').insert([{ legajo: formCond.legajo, apellido: formCond.apellido, telefono: formCond.telefono, nombre: `${formCond.legajo} - ${formCond.nombre_pila} ${formCond.apellido}`, activo: true }]);
+    if(type === 'unidades') await supabase.from('unidades').insert([{ numero: formUni.numero, activo: true }]);
+    if(type === 'servicios') await supabase.from('servicios').insert([{ nombre: formServ.nombre, activo: true }]);
+    setFormCond({ legajo: '', nombre_pila: '', apellido: '', telefono: '' }); setFormUni({ numero: '' }); setFormServ({ nombre: '' });
+    alert("Guardado correctamente"); fetchCatalogosAdmin();
+  };
+
+  // --- GRÁFICOS (Reportes y Desempeño) ---
+  const last12Months = Array.from({length: 12}, (_, i) => { const d = new Date(); d.setMonth(d.getMonth() - (11 - i)); return d.toLocaleString('es-ES', { month: 'short', year: '2-digit' }); });
+  const trendData = new Array(12).fill(0);
+  inspecciones.forEach(ins => { const idx = last12Months.indexOf(new Date(ins.created_at).toLocaleString('es-ES', { month: 'short', year: '2-digit' })); if (idx >= 0) trendData[idx]++; });
+
+  const conteoInspectores: Record<string, number> = {}; dataTabla.forEach(ins => { conteoInspectores[ins.inspector] = (conteoInspectores[ins.inspector] || 0) + 1; });
   const conteoTipos: Record<string, number> = {};
   const dataParaGraficoTipos = selectedInspectorChart ? dataTabla.filter(ins => ins.inspector === selectedInspectorChart) : dataTabla;
   dataParaGraficoTipos.forEach(ins => { conteoTipos[ins.tipo] = (conteoTipos[ins.tipo] || 0) + 1; });
@@ -140,53 +228,17 @@ export default function DashboardPage() {
   const tiposOrdenados = Object.entries(conteoTipos).sort((a,b) => b[1] - a[1]);
   const inspectoresOrdenados = Object.entries(conteoInspectores).sort((a,b) => b[1] - a[1]);
 
-  const chartTipos = {
-    labels: tiposOrdenados.map(t => t[0]),
-    datasets: [{ label: 'Cantidad', data: tiposOrdenados.map(t => t[1]), backgroundColor: tiposOrdenados.map((t, i) => selectedTypeChart && t[0] !== selectedTypeChart ? '#e5e7eb' : ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'][i % 5]) }]
-  };
+  const chartTipos = { labels: tiposOrdenados.map(t => t[0]), datasets: [{ label: 'Cantidad', data: tiposOrdenados.map(t => t[1]), backgroundColor: tiposOrdenados.map((t, i) => selectedTypeChart && t[0] !== selectedTypeChart ? '#e5e7eb' : ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'][i % 5]) }] };
+  const chartInspectores = { labels: inspectoresOrdenados.map(i => i[0]), datasets: [{ label: 'Inspecciones', data: inspectoresOrdenados.map(i => i[1]), backgroundColor: inspectoresOrdenados.map(i => i[0] === selectedInspectorChart ? '#FFCC00' : '#003366') }] };
 
-  const chartInspectores = {
-    labels: inspectoresOrdenados.map(i => i[0]),
-    datasets: [{ label: 'Inspecciones', data: inspectoresOrdenados.map(i => i[1]), backgroundColor: inspectoresOrdenados.map(i => i[0] === selectedInspectorChart ? '#FFCC00' : '#003366') }]
-  };
-
-  const types = Array.from(new Set(dataTabla.map(i => i.tipo)));
-  const inspectors = Array.from(new Set(dataTabla.map(i => i.inspector)));
-  const palette = ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'];
-  const chartStacked = {
-    labels: inspectors,
-    datasets: types.map((type, i) => ({ label: type, backgroundColor: palette[i % palette.length], data: inspectors.map(insp => dataTabla.filter(ins => ins.inspector === insp && ins.tipo === type).length) }))
-  };
-
+  const types = Array.from(new Set(dataTabla.map(i => i.tipo))); const inspectors = Array.from(new Set(dataTabla.map(i => i.inspector)));
+  const chartStacked = { labels: inspectors, datasets: types.map((type, i) => ({ label: type, backgroundColor: ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'][i % 5], data: inspectors.map(insp => dataTabla.filter(ins => ins.inspector === insp && ins.tipo === type).length) })) };
   const chartOptionsNumbers = { maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { anchor: 'end' as const, align: 'end' as const, font: { weight: 'bold' as const }, formatter: (v:number) => v > 0 ? v : '' } }, scales: { y: { beginAtZero: true, grace: '10%' } } };
 
-  const optionsInspectorChart = {
-    ...chartOptionsNumbers,
-    onClick: (e: any, elements: any) => {
-      if (elements.length > 0) {
-        const label = inspectoresOrdenados[elements[0].index][0];
-        setSelectedInspectorChart(label === selectedInspectorChart ? null : label);
-      } else setSelectedInspectorChart(null);
-    }
-  };
-
-  const optionsTypeChart = {
-    ...chartOptionsNumbers,
-    onClick: (e: any, elements: any) => {
-      if (elements.length > 0) {
-        const label = tiposOrdenados[elements[0].index][0];
-        setSelectedTypeChart(label === selectedTypeChart ? null : label);
-      } else { setSelectedTypeChart(null); setSelectedInspectorChart(null); }
-    }
-  };
-
-  const dataFinalTabla = selectedTypeChart ? dataTabla.filter(ins => ins.tipo === selectedTypeChart) : dataTabla;
-
-  // --- LÓGICA DE HORAS TRABAJADAS (DESEMPEÑO) ---
+  // --- LÓGICA HORAS (Desempeño) ---
   const getHorasRango = (nombreInsp: string, inicioYMD: string, finYMD: string) => {
     const sFiltrados = shifts.filter(s => s.nombre === nombreInsp && s.fecha.substring(0,10) >= inicioYMD && s.fecha.substring(0,10) <= finYMD);
     const iFiltradas = inspecciones.filter(i => i.inspector === nombreInsp && i.created_at.substring(0,10) >= inicioYMD && i.created_at.substring(0,10) <= finYMD);
-    
     const dias: any = {};
     sFiltrados.forEach(s => {
       const dKey = s.fecha.substring(0, 10);
@@ -197,84 +249,43 @@ export default function DashboardPage() {
       if (s.accion === 'INICIO_REF') dias[dKey].refStart = dObj;
       if (s.accion === 'FIN_REF') dias[dKey].refEnd = dObj;
     });
-
     let totalMs = 0;
     for (const dKey in dias) {
       const d = dias[dKey];
       if (d.start) {
         let end = d.end;
-        if (!end) {
-          const hoyIns = iFiltradas.filter(i => i.created_at.substring(0, 10) === dKey);
-          if (hoyIns.length > 0) end = new Date(Math.max(...hoyIns.map(i => new Date(i.created_at).getTime())));
-          else end = d.start;
-        }
+        if (!end) { const hoyIns = iFiltradas.filter(i => i.created_at.substring(0, 10) === dKey); if (hoyIns.length > 0) end = new Date(Math.max(...hoyIns.map(i => new Date(i.created_at).getTime()))); else end = d.start; }
         let dayMs = end.getTime() - d.start.getTime();
         if (d.refStart && d.refEnd) dayMs -= (d.refEnd.getTime() - d.refStart.getTime());
         if (dayMs > 0) totalMs += dayMs;
       }
     }
-    const h = Math.floor(totalMs / 3600000);
-    const m = Math.floor((totalMs % 3600000) / 60000);
+    const h = Math.floor(totalMs / 3600000); const m = Math.floor((totalMs % 3600000) / 60000);
     return { ms: totalMs, text: `${h}:${m.toString().padStart(2, '0')}` };
   };
 
-  // --- LÓGICA MODAL DESEMPEÑO (Mes Específico) ---
-  const [desempenoDatos, setDesempenoDatos] = useState<any>({ grid: [], totalMs: 0, kpis: {}, temas: {}, mapaIns: [] });
-
+  const [desempenoDatos, setDesempenoDatos] = useState<any>({ grid: [], totalMs: 0, kpis: {}, temas: {}, mapaIns: [], mapaShifts: [] });
   useEffect(() => {
     if (modalDesempeno) {
-      const parts = mesDesempeno.split('-');
-      const y = parseInt(parts[0]); const m = parseInt(parts[1]) - 1;
+      const parts = mesDesempeno.split('-'); const y = parseInt(parts[0]); const m = parseInt(parts[1]) - 1;
       const firstDay = new Date(y, m, 1); const lastDay = new Date(y, m + 1, 0);
-      
-      const grid = [];
-      let msAcumulado = 0;
-      
+      const grid = []; let msAcumulado = 0;
       for (let day = 1; day <= lastDay.getDate(); day++) {
         const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         const calc = getHorasRango(modalDesempeno, dateStr, dateStr);
         msAcumulado += calc.ms;
-        const accH = Math.floor(msAcumulado / 3600000);
-        const accM = Math.floor((msAcumulado % 3600000) / 60000);
-        grid.push({
-          dateISO: dateStr, // Agregado para el filtro
-          fecha: `${String(day).padStart(2, '0')}/${String(m + 1).padStart(2, '0')}/${y}`,
-          horas: calc.ms > 0 ? calc.text : 'F',
-          acumulado: `${accH}:${accM.toString().padStart(2, '0')}`
-        });
+        grid.push({ dateISO: dateStr, fecha: `${String(day).padStart(2, '0')}/${String(m + 1).padStart(2, '0')}/${y}`, horas: calc.ms > 0 ? calc.text : 'F', acumulado: `${Math.floor(msAcumulado / 3600000)}:${Math.floor((msAcumulado % 3600000) / 60000).toString().padStart(2, '0')}` });
       }
-
-      const mesStart = `${mesDesempeno}-01`;
-      const mesEnd = `${mesDesempeno}-31`;
-      
-      // Inspecciones del mes
-      const iMes = inspecciones.filter(i => i.inspector === modalDesempeno && i.created_at.substring(0, 10) >= mesStart && i.created_at.substring(0, 10) <= mesEnd);
-      
-      // Jornadas (Shifts) del mes normalizadas para el mapa
-      const sMes = shifts.filter(s => s.nombre === modalDesempeno && s.fecha.substring(0, 10) >= mesStart && s.fecha.substring(0, 10) <= mesEnd);
-      const shiftsNorm = sMes.map(s => ({
-        id: s.id,
-        inspector: s.nombre,
-        tipo: `📍 ${s.accion} JORNADA`, // Etiqueta especial
-        lat: s.lat,
-        lon: s.lon,
-        created_at: s.fecha,
-        isShift: true // Bandera para bloquear el botón "Ver Ficha"
-      }));
-
+      const iMes = inspecciones.filter(i => i.inspector === modalDesempeno && i.created_at.substring(0, 10) >= `${mesDesempeno}-01` && i.created_at.substring(0, 10) <= `${mesDesempeno}-31`);
+      const sMes = shifts.filter(s => s.nombre === modalDesempeno && s.fecha.substring(0, 10) >= `${mesDesempeno}-01` && s.fecha.substring(0, 10) <= `${mesDesempeno}-31`);
+      const shiftsNorm = sMes.map(s => ({ id: s.id, inspector: s.nombre, tipo: `📍 ${s.accion} JORNADA`, lat: s.lat, lon: s.lon, created_at: s.fecha, isShift: true }));
       const kpis: any = {}; const temas: any = {};
-      iMes.forEach(i => {
-        kpis[i.tipo] = (kpis[i.tipo] || 0) + 1;
-        if (i.tipo.includes('TEMAS') && i.datos_formulario?.tema_tipo) temas[i.datos_formulario.tema_tipo] = (temas[i.datos_formulario.tema_tipo] || 0) + 1;
-      });
-
+      iMes.forEach(i => { kpis[i.tipo] = (kpis[i.tipo] || 0) + 1; if (i.tipo.includes('TEMAS') && i.datos_formulario?.tema_tipo) temas[i.datos_formulario.tema_tipo] = (temas[i.datos_formulario.tema_tipo] || 0) + 1; });
       setDesempenoDatos({ grid, totalMs: msAcumulado, kpis, temas, mapaIns: iMes, mapaShifts: shiftsNorm });
     }
   }, [modalDesempeno, mesDesempeno, inspecciones, shifts]);
 
-// --- FILTRO DINÁMICO PARA EL MAPA DE DESEMPEÑO ---
-  const mapDataToShow = (mapaVista === 'inspecciones' ? (desempenoDatos?.mapaIns || []) : (desempenoDatos?.mapaShifts || []))
-      .filter((item: any) => selectedDateFilter ? item.created_at.substring(0,10) === selectedDateFilter : true);
+  const mapDataToShow = (mapaVista === 'inspecciones' ? (desempenoDatos?.mapaIns || []) : (desempenoDatos?.mapaShifts || [])).filter((item: any) => selectedDateFilter ? item.created_at.substring(0,10) === selectedDateFilter : true);
 
   if (!adminUser) return <div className="p-10 text-center">Cargando...</div>;
 
@@ -282,63 +293,208 @@ export default function DashboardPage() {
     <div className="flex h-screen bg-[#f4f7f9] font-sans overflow-hidden">
       
       {/* SIDEBAR */}
-      <div className="w-64 bg-[#003366] text-white flex flex-col shadow-xl z-20 shrink-0">
-        <div className="p-6 bg-white m-4 rounded-lg text-center"><img src="https://i.ibb.co/RG0tNq6t/Logo-Web-copia.png" className="h-10 mx-auto" alt="Logo" /><div className="text-[#003366] text-[10px] font-black mt-2">GESTIÓN OPERATIVA V3</div></div>
-        <nav className="flex-1 px-2 space-y-2">
-          <button onClick={() => setActiveTab('reportes')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'reportes' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>📊 Reportes</button>
-          <button onClick={() => setActiveTab('desempeno')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'desempeno' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>👥 Desempeño</button>
-          <button onClick={() => setActiveTab('mapa')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'mapa' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>📍 Mapa Satelital</button>
-          <button onClick={() => setActiveTab('usuarios')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold ${activeTab === 'usuarios' ? 'bg-white/10 text-[#FFCC00] border-l-4 border-[#FFCC00]' : 'hover:bg-white/5'}`}>⚙️ Usuarios</button>
+      <div className="w-64 bg-[#0B132B] text-white flex flex-col shadow-xl z-20 shrink-0">
+        <div className="p-6 bg-white/5 m-4 rounded-lg text-center border border-white/10">
+          <img src="https://i.ibb.co/RG0tNq6t/Logo-Web-copia.png" className="h-10 mx-auto" alt="Logo" />
+          <div className="text-white/50 text-[10px] font-black mt-2 tracking-widest">FLEET MANAGEMENT V3</div>
+        </div>
+        <nav className="flex-1 px-4 space-y-2 overflow-y-auto">
+          <button onClick={() => setActiveTab('reportes')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'reportes' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>📊 Reportes Generales</button>
+          <button onClick={() => setActiveTab('flota')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'flota' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>🚍 Panel de Flota</button>
+          <button onClick={() => setActiveTab('desempeno')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'desempeno' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>👥 Desempeño</button>
+          <button onClick={() => setActiveTab('mapa')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'mapa' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>📍 Mapa Satelital</button>
+          <button onClick={() => setActiveTab('usuarios')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'usuarios' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>⚙️ Usuarios</button>
+          <button onClick={() => setActiveTab('config')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'config' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>🛠️ Configuración</button>
         </nav>
-        <div className="p-4"><button onClick={() => { localStorage.removeItem('buttini_user'); window.location.href = '/'; }} className="w-full bg-red-600 p-3 rounded-lg font-bold hover:bg-red-700">CERRAR SESIÓN</button></div>
+        <div className="p-4"><button onClick={() => { localStorage.removeItem('buttini_user'); window.location.href = '/'; }} className="w-full bg-red-500/10 text-red-500 border border-red-500/20 p-3 rounded-lg font-bold hover:bg-red-500 hover:text-white transition-all text-sm flex justify-center items-center gap-2">↪ Cerrar Sesión</button></div>
       </div>
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* TOP BAR FILTROS */}
-        <div className="bg-white p-4 shadow-sm flex justify-between items-center z-10 shrink-0 border-b">
+        <div className="bg-white p-4 shadow-sm flex justify-between items-center z-10 shrink-0 border-b border-gray-100">
           <div className="flex gap-4 items-center flex-wrap">
-            <div className="flex items-center gap-2"><span className="text-xs font-bold text-gray-500 uppercase">Desde</span><input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="border p-2 rounded text-sm bg-gray-50" /></div>
-            <div className="flex items-center gap-2"><span className="text-xs font-bold text-gray-500 uppercase">Hasta</span><input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="border p-2 rounded text-sm bg-gray-50" /></div>
-            <select value={filtroInspector} onChange={(e)=>setFiltroInspector(e.target.value)} className="border p-2 rounded text-sm bg-white font-bold text-[#003366]"><option value="">Todos los Inspectores</option>{inspectoresUnicos.map((i:any) => <option key={i} value={i}>{i}</option>)}</select>
-            <select value={filtroTipo} onChange={(e)=>setFiltroTipo(e.target.value)} className="border p-2 rounded text-sm bg-white font-bold text-[#003366] max-w-xs"><option value="">Todos los Tipos</option>{tiposUnicos.map((t:any) => <option key={t} value={t}>{t}</option>)}</select>
+            <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200"><span className="text-xs font-bold text-gray-500">🗓️ Desde</span><input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="bg-transparent border-none text-sm font-bold text-[#0B132B] outline-none" /></div>
+            <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200"><span className="text-xs font-bold text-gray-500">Hasta</span><input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="bg-transparent border-none text-sm font-bold text-[#0B132B] outline-none" /></div>
+            <select value={filtroInspector} onChange={(e)=>setFiltroInspector(e.target.value)} className="border border-gray-200 p-2 rounded-lg text-sm bg-white font-bold text-[#0B132B]"><option value="">Todos los Inspectores</option>{inspectoresUnicos.map((i:any) => <option key={i} value={i}>{i}</option>)}</select>
+            <select value={filtroTipo} onChange={(e)=>setFiltroTipo(e.target.value)} className="border border-gray-200 p-2 rounded-lg text-sm bg-white font-bold text-[#0B132B] max-w-xs"><option value="">Todos los Tipos</option>{tiposUnicos.map((t:any) => <option key={t} value={t}>{t}</option>)}</select>
           </div>
-          <div className="font-bold text-[#003366]">👤 {adminUser.nombre}</div>
+          <div className="flex items-center gap-3">
+             <div className="text-right"><div className="font-bold text-[#0B132B] text-sm leading-tight">{adminUser.nombre}</div><div className="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Fleet Manager</div></div>
+             <div className="w-10 h-10 bg-[#0B132B] rounded-full flex items-center justify-center text-white font-bold shadow-md">A</div>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
-          {loading ? <div className="text-center mt-20 font-bold text-xl animate-pulse">Cargando datos en vivo...</div> : (
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#f8f9fa]">
+          {loading ? <div className="text-center mt-20 font-bold text-xl animate-pulse text-gray-400">Analizando flota...</div> : (
             <>
-              {/* --- REPORTES --- */}
+              {/* ========================================================================================= */}
+              {/* PANTALLA: PANEL DE FLOTA (NUEVA) */}
+              {/* ========================================================================================= */}
+              {activeTab === 'flota' && (
+                <div className="space-y-8 animate-in fade-in duration-500">
+                  <div>
+                    <h2 className="text-2xl font-black text-[#0B132B]">Panel de Inspecciones</h2>
+                    <p className="text-gray-500 text-sm mt-1">Estado actual de la flota y conductores (Según filtro de fechas superior)</p>
+                  </div>
+                  
+                  {/* KPIs Modernos */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                      <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 text-2xl">👨‍✈️</div>
+                      <div><div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Inspeccionados</div><div className="text-3xl font-black text-[#0B132B] leading-none">{rankingConductores.length}</div></div>
+                    </div>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                      <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 text-2xl">⏳</div>
+                      <div><div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Pendientes</div><div className="text-3xl font-black text-[#0B132B] leading-none">{Math.max(0, pendientesCount)}</div></div>
+                    </div>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                      <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center text-red-500 text-2xl">⚠️</div>
+                      <div><div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Alertas Críticas</div><div className="text-3xl font-black text-red-600 leading-none">{urgentInspections.length}</div></div>
+                    </div>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                      <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-500 text-2xl">🛡️</div>
+                      <div><div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Score Flota</div><div className="text-3xl font-black text-green-600 leading-none">{scoreFlota}%</div></div>
+                    </div>
+                  </div>
+
+                  {/* REVISIONES URGENTES */}
+                  {urgentInspections.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-bold text-[#0B132B] mb-4 flex items-center gap-2"><span className="text-red-500 animate-pulse">🚨</span> Revisiones Urgentes</h3>
+                      <div className="flex gap-6 overflow-x-auto pb-4 snap-x">
+                        {urgentInspections.slice(0,10).map((ins, i) => (
+                          <div key={i} className="min-w-[300px] bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-red-500 p-5 flex flex-col justify-between shrink-0 snap-start">
+                            <div>
+                              <div className="flex justify-between items-start mb-3">
+                                <div><div className="font-black text-[#0B132B] truncate w-48">{ins.datos_formulario?.conductor || 'Desconocido'}</div><div className="text-xs text-gray-500">🕒 {new Date(ins.created_at).toLocaleString('es-ES', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}</div></div>
+                                <span className="bg-red-50 text-red-600 text-[10px] font-black px-2 py-1 rounded">URGENTE</span>
+                              </div>
+                              <div className="bg-gray-50 p-3 rounded-xl mb-4"><div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Vehículo / Servicio</div><div className="font-bold text-[#0B132B] text-xs">{ins.datos_formulario?.unidad || '-'} • {ins.datos_formulario?.servicio || '-'}</div></div>
+                            </div>
+                            <button onClick={() => setModalIns(ins)} className="w-full bg-[#0B132B] text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-900 transition-colors">Ver Detalles</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RANKING DE NOVEDADES */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="p-6 border-b border-gray-100 flex justify-between items-center"><h3 className="text-lg font-bold text-[#0B132B]">Ranking de Novedades (Gravedad)</h3></div>
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-gray-50/50 text-gray-400 uppercase text-xs font-bold tracking-wider"><tr><th className="p-4 pl-6 w-16">Rank</th><th className="p-4">Conductor</th><th className="p-4 text-center">Última Unidad</th><th className="p-4 text-center">Estado / Faltas</th><th className="p-4 text-right pr-6">Acción</th></tr></thead>
+                      <tbody>
+                        {rankingConductores.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-gray-400">No hay inspecciones en este rango.</td></tr> : 
+                          rankingConductores.map((c:any, i:number) => (
+                            <tr key={c.nombre} onClick={() => setModalDriver(c)} className="border-b border-gray-50 hover:bg-gray-50/80 cursor-pointer transition-colors group">
+                              <td className="p-4 pl-6"><div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs ${i < 3 ? 'bg-red-500 shadow-lg shadow-red-500/30' : 'bg-gray-300'}`}>{i + 1}</div></td>
+                              <td className="p-4"><div className="font-bold text-[#0B132B]">{c.nombre.split('-')[1]?.trim() || c.nombre}</div><div className="text-[10px] text-gray-400 font-mono">ID: {c.nombre.split('-')[0]?.trim()}</div></td>
+                              <td className="p-4 text-center"><span className="bg-gray-100 text-gray-600 font-bold px-3 py-1 rounded-lg text-xs">{c.unidad}</span></td>
+                              <td className="p-4 text-center">{c.faltas > 0 ? <span className="bg-red-50 text-red-600 font-bold px-3 py-1.5 rounded-lg text-xs border border-red-100 inline-flex items-center gap-1">⚠️ {c.faltas} FALTAS</span> : <span className="bg-green-50 text-green-600 font-bold px-3 py-1.5 rounded-lg text-xs border border-green-100 inline-flex items-center gap-1">✔️ SIN FALTAS</span>}</td>
+                              <td className="p-4 pr-6 text-right text-gray-300 group-hover:text-blue-600 font-bold">VER HISTORIAL ❯</td>
+                            </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================================================= */}
+              {/* PANTALLA: CONFIGURACION ABM (NUEVA) */}
+              {/* ========================================================================================= */}
+              {activeTab === 'config' && (
+                <div className="space-y-6 animate-in fade-in duration-500">
+                  <div className="flex gap-4 border-b border-gray-200">
+                    <button onClick={() => setAbmTab('conductores')} className={`pb-3 font-bold text-sm px-2 ${abmTab==='conductores' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-[#0B132B]'}`}>👨‍✈️ Conductores</button>
+                    <button onClick={() => setAbmTab('unidades')} className={`pb-3 font-bold text-sm px-2 ${abmTab==='unidades' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-[#0B132B]'}`}>🚌 Unidades</button>
+                    <button onClick={() => setAbmTab('servicios')} className={`pb-3 font-bold text-sm px-2 ${abmTab==='servicios' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-[#0B132B]'}`}>🗺️ Servicios</button>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center bg-blue-50/50">
+                    <div><h3 className="font-bold text-[#0B132B] mb-1">Carga Masiva ({abmTab.toUpperCase()})</h3><p className="text-xs text-gray-500">Descarga la plantilla CSV, complétala y súbela para actualizar la base de datos.</p></div>
+                    <div className="flex gap-3">
+                      <button onClick={() => downloadCSVTemplate(abmTab)} className="bg-white text-blue-600 border border-blue-200 px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-50 shadow-sm">⬇️ Plantilla CSV</button>
+                      <label className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-700 cursor-pointer shadow-sm shadow-blue-500/30">⬆️ Subir CSV <input type="file" accept=".csv" className="hidden" onChange={(e) => handleCSVUpload(e, abmTab)}/></label>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-[#0B132B] mb-4">Alta Manual Individual</h3>
+                    <form onSubmit={(e) => handleSaveABM(e, abmTab)} className="flex gap-4 items-end flex-wrap">
+                      {abmTab === 'conductores' && (
+                        <>
+                          <div className="flex-1 min-w-[100px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Legajo</label><input type="text" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={formCond.legajo} onChange={e=>setFormCond({...formCond, legajo: e.target.value})} required/></div>
+                          <div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombres</label><input type="text" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={formCond.nombre_pila} onChange={e=>setFormCond({...formCond, nombre_pila: e.target.value})} required/></div>
+                          <div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Apellidos</label><input type="text" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={formCond.apellido} onChange={e=>setFormCond({...formCond, apellido: e.target.value})} required/></div>
+                          <div className="flex-1 min-w-[120px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Teléfono</label><input type="text" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={formCond.telefono} onChange={e=>setFormCond({...formCond, telefono: e.target.value})} /></div>
+                        </>
+                      )}
+                      {abmTab === 'unidades' && <div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Número de Unidad (Ej: 145)</label><input type="text" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={formUni.numero} onChange={e=>setFormUni({numero: e.target.value})} required/></div>}
+                      {abmTab === 'servicios' && <div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombre Servicio (Ej: 540 - Ciudad)</label><input type="text" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={formServ.nombre} onChange={e=>setFormServ({nombre: e.target.value})} required/></div>}
+                      <button type="submit" className="bg-[#0B132B] text-white font-bold px-6 py-2 rounded-xl text-sm h-[38px] hover:bg-blue-900 transition-colors">Guardar</button>
+                    </form>
+                  </div>
+
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-gray-50/50 text-gray-400 uppercase text-xs font-bold tracking-wider">
+                        <tr>
+                          {abmTab === 'conductores' ? <><th className="p-4">Legajo / Nombre</th><th className="p-4 text-center">Teléfono</th></> : <th className="p-4">Item</th>}
+                          <th className="p-4 text-center w-32">Estado</th><th className="p-4 text-right">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(abmTab === 'conductores' ? catConductores : (abmTab === 'unidades' ? catUnidades : catServicios)).map(item => (
+                           <tr key={item.id} className={`border-b border-gray-50 hover:bg-gray-50/80 transition-colors ${!item.activo ? 'opacity-50 grayscale' : ''}`}>
+                             {abmTab === 'conductores' ? (
+                               <><td className="p-4"><div className="font-bold text-[#0B132B]">{item.apellido}, {item.nombre_pila}</div><div className="text-[10px] font-mono text-gray-500">LEG: {item.legajo}</div></td><td className="p-4 text-center text-gray-600">{item.telefono || '-'}</td></>
+                             ) : <td className="p-4 font-bold text-[#0B132B]">{item.numero || item.nombre}</td>}
+                             <td className="p-4 text-center">{item.activo ? <span className="bg-green-100 text-green-700 font-bold px-2 py-1 rounded text-[10px]">ACTIVO</span> : <span className="bg-red-100 text-red-700 font-bold px-2 py-1 rounded text-[10px]">INHABILITADO</span>}</td>
+                             <td className="p-4 text-right">
+                               <button onClick={() => toggleActivo(abmTab, item.id, item.activo)} className={`font-bold text-xs px-3 py-1.5 rounded-lg transition-colors ${item.activo ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
+                                  {item.activo ? 'Inhabilitar' : 'Reactivar'}
+                               </button>
+                             </td>
+                           </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================================================= */}
+              {/* PESTAÑAS ANTIGUAS (REPORTES, MAPA, DESEMPEÑO, USUARIOS) -> MANTIENEN SU CÓDIGO INTACTO */}
+              {/* ========================================================================================= */}
+
               {activeTab === 'reportes' && (
                 <div className="space-y-6">
                   <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-6">
-                    <div className="min-w-[150px] border-r pr-4"><h3 className="text-gray-400 font-bold uppercase text-[10px]">Total Inspecciones</h3><div className="text-4xl font-black text-[#003366]">{dataTabla.length}</div></div>
-                    <div className="flex-1 h-32"><Line data={{ labels: last12Months, datasets: [{ data: trendData, borderColor: '#3b82f6', backgroundColor: '#dc3545', pointRadius: 4, tension: 0.3 }] }} options={chartOptionsNumbers} /></div>
+                    <div className="min-w-[150px] border-r pr-4"><h3 className="text-gray-400 font-bold uppercase text-[10px]">Total Inspecciones</h3><div className="text-4xl font-black text-[#0B132B]">{dataTabla.length}</div></div>
+                    <div className="flex-1 h-32"><Line data={{ labels: last12Months, datasets: [{ data: trendData, borderColor: '#1864f8', backgroundColor: '#dc3545', pointRadius: 4, tension: 0.3 }] }} options={chartOptionsNumbers} /></div>
                   </div>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#003366] font-bold mb-4">Distribución por Tipo {selectedInspectorChart && <span className="text-xs text-orange-500 ml-2">(Filtrado por: {selectedInspectorChart})</span>}</h3><div className="h-64"><Bar data={chartTipos} options={optionsTypeChart} /></div></div>
-                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#003366] font-bold mb-4">Total por Inspector <span className="text-[10px] font-normal text-gray-400">(Clic para filtrar)</span></h3><div className="h-64"><Bar data={chartInspectores} options={optionsInspectorChart} /></div></div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#0B132B] font-bold mb-4">Distribución por Tipo {selectedInspectorChart && <span className="text-xs text-blue-500 ml-2">(Filtro: {selectedInspectorChart})</span>}</h3><div className="h-64"><Bar data={chartTipos} options={optionsTypeChart} /></div></div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border"><h3 className="text-[#0B132B] font-bold mb-4">Total por Inspector <span className="text-[10px] font-normal text-gray-400">(Clic para filtrar)</span></h3><div className="h-64"><Bar data={chartInspectores} options={optionsInspectorChart} /></div></div>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm border flex flex-col h-[500px]">
                     <div className="bg-gray-50 p-4 border-b flex justify-between items-center shrink-0 flex-wrap gap-2">
-                      <div className="font-bold text-[#003366] text-lg">Registro Detallado</div>
+                      <div className="font-bold text-[#0B132B] text-lg">Registro Detallado</div>
                       <div className="flex gap-4">
-                        <label className="flex items-center gap-2 bg-[#fffbe6] px-3 py-1 border border-yellow-200 rounded cursor-pointer text-xs font-bold text-[#003366]"><input type="checkbox" checked={chkSeguimiento} onChange={e=>setChkSeguimiento(e.target.checked)}/> Solo Seguimiento</label>
-                        <label className="flex items-center gap-2 bg-[#fffbe6] px-3 py-1 border border-yellow-200 rounded cursor-pointer text-xs font-bold text-[#003366]"><input type="checkbox" checked={chkObservaciones} onChange={e=>setChkObservaciones(e.target.checked)}/> Solo Observaciones</label>
+                        <label className="flex items-center gap-2 bg-white px-3 py-1 border rounded cursor-pointer text-xs font-bold text-[#0B132B]"><input type="checkbox" checked={chkSeguimiento} onChange={e=>setChkSeguimiento(e.target.checked)}/> Solo Seguimiento</label>
+                        <label className="flex items-center gap-2 bg-white px-3 py-1 border rounded cursor-pointer text-xs font-bold text-[#0B132B]"><input type="checkbox" checked={chkObservaciones} onChange={e=>setChkObservaciones(e.target.checked)}/> Solo Observaciones</label>
                       </div>
                     </div>
                     <div className="overflow-y-auto flex-1 relative">
                       <table className="w-full text-sm text-left">
-                        <thead className="bg-white text-[#003366] sticky top-0 shadow-sm z-10"><tr><th className="p-3">Fecha/Lugar</th><th className="p-3">Inspector</th><th className="p-3">Tipo</th><th className="p-3">Observaciones</th><th className="p-3 text-center">Acción</th><th className="p-3 text-center">Estado</th></tr></thead>
+                        <thead className="bg-white text-[#0B132B] sticky top-0 shadow-sm z-10"><tr><th className="p-3">Fecha</th><th className="p-3">Inspector</th><th className="p-3">Tipo</th><th className="p-3">Observaciones</th><th className="p-3 text-center">Acción</th><th className="p-3 text-center">Estado</th></tr></thead>
                         <tbody>
                           {dataFinalTabla.map(ins => (
                             <tr key={ins.id} className="border-b hover:bg-gray-50">
                               <td className="p-3 whitespace-nowrap"><a href={`https://www.google.com/maps/search/?api=1&query=${ins.lat},${ins.lon}`} target="_blank" className="text-blue-600 hover:underline font-bold" title="Ver en Mapa">{new Date(ins.created_at).toLocaleDateString()} {new Date(ins.created_at).toLocaleTimeString().slice(0,5)} 📍</a></td>
-                              <td className="p-3 font-bold">{ins.inspector}</td>
-                              <td className="p-3"><span className="bg-gray-100 px-2 py-1 rounded text-[10px] font-bold border truncate block max-w-[200px]">{ins.tipo}</span></td>
-                              <td className="p-3 text-xs text-gray-600 max-w-[200px] truncate">{ins.obs_general}</td>
-                              <td className="p-3 text-center"><button onClick={() => setModalIns(ins)} className="bg-[#FFCC00] text-[#003366] px-3 py-1 rounded font-bold text-xs">VER</button></td>
-                              <td className="p-3 text-center text-[10px] font-bold uppercase">{getInspectionStatus(ins.id)}</td>
+                              <td className="p-3 font-bold">{ins.inspector}</td><td className="p-3"><span className="bg-gray-100 px-2 py-1 rounded text-[10px] font-bold border">{ins.tipo}</span></td><td className="p-3 text-xs text-gray-600 max-w-[200px] truncate">{ins.obs_general}</td>
+                              <td className="p-3 text-center"><button onClick={() => setModalIns(ins)} className="bg-[#0B132B] text-white px-3 py-1 rounded font-bold text-xs">VER</button></td><td className="p-3 text-center text-[10px] font-bold uppercase">{getInspectionStatus(ins.id)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -348,22 +504,24 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* --- DESEMPEÑO PERSONAL --- */}
+              {activeTab === 'mapa' && (
+                <div className="h-full flex flex-col bg-white rounded-xl shadow-sm border p-4">
+                  <div className="mb-4 flex justify-between items-center"><h2 className="text-[#0B132B] font-bold text-lg">📍 Mapa de Inspecciones</h2><span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs font-bold border border-blue-200">{dataTabla.length} Puntos</span></div>
+                  <div className="flex-1 rounded-xl overflow-hidden border"><MapComponent inspecciones={dataTabla} onVerFicha={(ins:any) => setModalIns(ins)} /></div>
+                </div>
+              )}
+
               {activeTab === 'desempeno' && (
                 <div className="space-y-6">
-                  <h2 className="text-[#003366] font-bold text-xl mb-4 border-b-2 border-[#FFCC00] pb-2 inline-block">Reporte de Horas y Desempeño Diario</h2>
+                  <h2 className="text-[#0B132B] font-bold text-xl mb-4 border-b-2 border-blue-500 pb-2 inline-block">Reporte de Horas y Desempeño Diario</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {inspectoresUnicos.map((insp: any) => {
                       const stats = getHorasRango(insp, fechaInicio, fechaFin);
                       const totalIns = inspecciones.filter(i => i.inspector === insp && i.created_at >= `${fechaInicio}T00:00:00Z` && i.created_at <= `${fechaFin}T23:59:59Z`).length;
                       return (
-                        <div key={insp} className="bg-white p-6 rounded-xl shadow-sm border flex flex-col justify-between hover:shadow-md transition-shadow">
-                          <div>
-                            <h3 className="text-lg font-black text-[#003366] mb-4">{insp}</h3>
-                            <div className="flex items-baseline gap-2 mb-2"><span className="text-4xl font-light text-[#003366]">{stats.text}</span><span className="text-sm text-gray-500">hs acumuladas</span></div>
-                            <div className="flex items-baseline gap-2 mb-6"><span className="text-xl font-bold text-gray-800">{totalIns}</span><span className="text-sm text-gray-500">inspecciones</span></div>
-                          </div>
-                          <button onClick={() => setModalDesempeno(insp)} className="w-full bg-[#FFCC00] text-[#003366] py-3 rounded font-bold hover:bg-yellow-400">VER DETALLE</button>
+                        <div key={insp} className="bg-white p-6 rounded-2xl shadow-sm border flex flex-col justify-between hover:shadow-md transition-shadow">
+                          <div><h3 className="text-lg font-black text-[#0B132B] mb-4">{insp}</h3><div className="flex items-baseline gap-2 mb-2"><span className="text-4xl font-light text-[#0B132B]">{stats.text}</span><span className="text-sm text-gray-500">hs acumuladas</span></div><div className="flex items-baseline gap-2 mb-6"><span className="text-xl font-bold text-gray-800">{totalIns}</span><span className="text-sm text-gray-500">inspecciones</span></div></div>
+                          <button onClick={() => setModalDesempeno(insp)} className="w-full bg-[#0B132B] text-white py-3 rounded-xl font-bold hover:bg-blue-900 transition-colors">VER DETALLE</button>
                         </div>
                       );
                     })}
@@ -371,164 +529,102 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* --- MAPA --- */}
-              {activeTab === 'mapa' && (
-                <div className="h-full flex flex-col bg-white rounded-xl shadow-sm border p-4">
-                  <div className="mb-4 flex justify-between items-center"><h2 className="text-[#003366] font-bold text-lg">📍 Mapa de Inspecciones</h2><span className="bg-green-100 text-green-800 px-3 py-1 rounded text-xs font-bold border border-green-200">{dataTabla.length} Puntos</span></div>
-                  <div className="flex-1 rounded-xl overflow-hidden border"><MapComponent inspecciones={dataTabla} onVerFicha={(ins:any) => setModalIns(ins)} /></div>
-                </div>
-              )}
-
-              {/* --- USUARIOS --- */}
               {activeTab === 'usuarios' && (
-                <div className="space-y-6">
-                  <div className="bg-white p-6 rounded-xl shadow-sm border">
-                    <h3 className="text-[#003366] font-bold mb-4">Agregar Nuevo Usuario</h3>
-                    <form onSubmit={handleCreateUser} className="flex flex-wrap gap-4 items-end">
-                      <div className="flex-1 min-w-[150px]"><label className="block text-xs font-bold text-gray-500 mb-1">Usuario (Login)</label><input type="text" className="w-full border p-2 rounded bg-gray-50" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required /></div>
-                      <div className="flex-1 min-w-[150px]"><label className="block text-xs font-bold text-gray-500 mb-1">Clave</label><input type="password" className="w-full border p-2 rounded bg-gray-50" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required /></div>
-                      <div className="flex-1 min-w-[200px]"><label className="block text-xs font-bold text-gray-500 mb-1">Nombre Completo</label><input type="text" className="w-full border p-2 rounded bg-gray-50" value={newUser.nombre} onChange={e => setNewUser({...newUser, nombre: e.target.value})} required /></div>
-                      <div><label className="block text-xs font-bold text-gray-500 mb-1">Rol</label><select className="w-full border p-2 rounded bg-white" value={newUser.rol} onChange={e => setNewUser({...newUser, rol: e.target.value})}><option value="Inspector">Inspector</option><option value="Admin">Admin</option></select></div>
-                      <div><label className="block text-xs font-bold text-gray-500 mb-1">Jornada Mínima</label><select className="w-full border p-2 rounded bg-white" value={newUser.jornada} onChange={e => setNewUser({...newUser, jornada: e.target.value})}><option value="SI">Requerida (Sí)</option><option value="NO">Omitir (No)</option></select></div>
-                      <button type="submit" className="bg-green-600 text-white font-bold px-6 py-2 rounded">GUARDAR</button>
-                    </form>
-                  </div>
-                  <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-[#f8f9fa] text-[#003366] uppercase text-xs font-bold"><tr><th className="p-4 border-b">Usuario</th><th className="p-4 border-b">Nombre</th><th className="p-4 border-b">Rol</th><th className="p-4 border-b">Jornada</th><th className="p-4 border-b text-right">Acciones</th></tr></thead>
-                      <tbody>
-                        {usuarios.map(u => (
-                          <tr key={u.id} className="border-b hover:bg-gray-50">
-                            <td className="p-4 font-bold">{u.username}</td><td className="p-4">{u.nombre}</td>
-                            <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold text-white ${u.rol === 'Admin' ? 'bg-[#003366]' : 'bg-gray-500'}`}>{u.rol}</span></td>
-                            <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold text-white ${u.jornada === 'SI' ? 'bg-green-500' : 'bg-red-500'}`}>{u.jornada === 'SI' ? 'Requerida' : 'Omitida'}</span></td>
-                            <td className="p-4 text-right flex gap-3 justify-end">
-                              <button onClick={() => handleResetPassword(u.id, u.username)} className="text-blue-600 font-bold hover:underline text-xs">🔑 Reset Clave</button>
-                              <button onClick={() => handleDeleteUser(u.id, u.username)} className="text-red-500 font-bold hover:underline text-xs">❌ Eliminar</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                 <div className="space-y-6">
+                 <div className="bg-white p-6 rounded-xl shadow-sm border">
+                   <h3 className="text-[#0B132B] font-bold mb-4">Agregar Nuevo Usuario Administrador/Inspector</h3>
+                   <form onSubmit={handleCreateUser} className="flex flex-wrap gap-4 items-end">
+                     <div className="flex-1 min-w-[150px]"><label className="block text-xs font-bold text-gray-500 mb-1">Usuario (Login)</label><input type="text" className="w-full border p-2 rounded bg-gray-50" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required /></div>
+                     <div className="flex-1 min-w-[150px]"><label className="block text-xs font-bold text-gray-500 mb-1">Clave</label><input type="password" className="w-full border p-2 rounded bg-gray-50" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required /></div>
+                     <div className="flex-1 min-w-[200px]"><label className="block text-xs font-bold text-gray-500 mb-1">Nombre Completo</label><input type="text" className="w-full border p-2 rounded bg-gray-50" value={newUser.nombre} onChange={e => setNewUser({...newUser, nombre: e.target.value})} required /></div>
+                     <div><label className="block text-xs font-bold text-gray-500 mb-1">Rol</label><select className="w-full border p-2 rounded bg-white" value={newUser.rol} onChange={e => setNewUser({...newUser, rol: e.target.value})}><option value="Inspector">Inspector</option><option value="Admin">Admin</option></select></div>
+                     <div><label className="block text-xs font-bold text-gray-500 mb-1">Jornada Mínima</label><select className="w-full border p-2 rounded bg-white" value={newUser.jornada} onChange={e => setNewUser({...newUser, jornada: e.target.value})}><option value="SI">Requerida (Sí)</option><option value="NO">Omitir (No)</option></select></div>
+                     <button type="submit" className="bg-green-600 text-white font-bold px-6 py-2 rounded">GUARDAR</button>
+                   </form>
+                 </div>
+                 <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                   <table className="w-full text-sm text-left">
+                     <thead className="bg-[#f8f9fa] text-[#0B132B] uppercase text-xs font-bold"><tr><th className="p-4 border-b">Usuario</th><th className="p-4 border-b">Nombre</th><th className="p-4 border-b">Rol</th><th className="p-4 border-b">Jornada</th><th className="p-4 border-b text-right">Acciones</th></tr></thead>
+                     <tbody>
+                       {usuarios.map(u => (
+                         <tr key={u.id} className="border-b hover:bg-gray-50"><td className="p-4 font-bold">{u.username}</td><td className="p-4">{u.nombre}</td><td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold text-white ${u.rol === 'Admin' ? 'bg-[#0B132B]' : 'bg-gray-500'}`}>{u.rol}</span></td><td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold text-white ${u.jornada === 'SI' ? 'bg-green-500' : 'bg-red-500'}`}>{u.jornada === 'SI' ? 'Requerida' : 'Omitida'}</span></td><td className="p-4 text-right flex gap-3 justify-end"><button onClick={() => handleResetPassword(u.id, u.username)} className="text-blue-600 font-bold hover:underline text-xs">🔑 Reset Clave</button><button onClick={() => handleDeleteUser(u.id, u.username)} className="text-red-500 font-bold hover:underline text-xs">❌ Eliminar</button></td></tr>
+                       ))}
+                     </tbody>
+                   </table>
+                 </div>
+               </div>
               )}
             </>
           )}
         </div>
       </div>
 
-      {/* --- MODAL DESEMPEÑO --- */}
-      {modalDesempeno && (
+      {/* ========================================================================================= */}
+      {/* MODALES FLOTANTES */}
+      {/* ========================================================================================= */}
+
+      {/* MODAL: HISTORIAL DEL CONDUCTOR (Desde el Ranking de Flota) */}
+      {modalDriver && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
-          <div className="bg-white w-full max-w-6xl rounded-xl shadow-2xl flex flex-col h-[95vh]">
-            <div className="bg-[#003366] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0">
-              <h2 className="font-bold text-lg">Desempeño: {modalDesempeno}</h2>
-              <button onClick={() => { setModalDesempeno(null); setSelectedDateFilter(null); setMapaVista('inspecciones'); }} className="text-3xl leading-none hover:text-red-400">&times;</button>
+          <div className="bg-[#f4f7f9] w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col h-[90vh] overflow-hidden">
+            <div className="bg-white p-6 flex justify-between items-center border-b shrink-0">
+              <div className="flex gap-4 items-center">
+                 <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center text-3xl">👨‍✈️</div>
+                 <div>
+                   <div className="flex items-center gap-2"><h2 className="font-black text-2xl text-[#0B132B]">{modalDriver.nombre.split('-')[1]?.trim() || modalDriver.nombre}</h2><span className="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-1 rounded-full border border-blue-100">CONDUCTOR VERIFICADO</span></div>
+                   <div className="text-sm text-gray-500 font-medium">Legajo ID: <span className="font-mono text-[#0B132B]">{modalDriver.nombre.split('-')[0]?.trim()}</span> • {modalDriver.count} Inspecciones Totales</div>
+                 </div>
+              </div>
+              <button onClick={() => setModalDriver(null)} className="text-3xl text-gray-400 hover:text-red-500 leading-none">&times;</button>
             </div>
             
-            <div className="p-6 overflow-y-auto flex-1 bg-white">
-              <div className="flex justify-between items-center mb-6 bg-gray-50 p-4 rounded border">
-                <span className="font-bold text-[#003366]">Seleccionar Mes de Análisis:</span>
-                <input type="month" value={mesDesempeno} onChange={(e) => setMesDesempeno(e.target.value)} className="border p-2 rounded text-sm font-bold" />
-              </div>
-
-              <div className="flex flex-col lg:flex-row gap-8 mb-8">
-                {/* COL IZQ: KPIS */}
-                <div className="flex-1 space-y-4">
-                  <h3 className="font-bold text-[#003366] border-b-2 border-[#FFCC00] pb-2 text-lg">Inspecciones Realizadas</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-[#eef4f9] p-4 rounded text-center col-span-2 border"><div className="font-bold text-[#003366] text-sm mb-1">Total Inspecciones</div><div className="text-3xl font-light text-[#003366]">{desempenoDatos.mapaIns.length}</div></div>
-                    {Object.entries(desempenoDatos.kpis).map(([k, v]:any) => (
-                      <div key={k} className="bg-gray-50 p-4 rounded text-center border">
-                        <div className="font-bold text-gray-700 text-xs mb-1 h-8 flex items-center justify-center">{k}</div>
-                        <div className="text-xl font-bold text-[#FFCC00] drop-shadow-sm">{v}</div>
-                        {k.includes('TEMAS') && Object.keys(desempenoDatos.temas).length > 0 && (
-                          <div className="mt-2 text-left text-[9px] text-gray-500 border-t pt-2 space-y-1">
-                            {Object.entries(desempenoDatos.temas).map(([tk, tv]:any) => <div key={tk} className="flex justify-between"><span>{tk}</span><b>{tv}</b></div>)}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              {flotaInspecciones.filter(i => i.datos_formulario?.conductor === modalDriver.nombre).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(ins => {
+                const f = getHallazgos(ins.datos_formulario);
+                const isCritico = f.length > 2; const isAdver = f.length > 0 && f.length <= 2; const isOk = f.length === 0;
+                return (
+                  <div key={ins.id} className="bg-white rounded-2xl p-5 border border-gray-100 flex gap-4 shadow-sm hover:shadow-md transition-shadow">
+                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-xl shrink-0 ${isCritico ? 'bg-red-600' : isAdver ? 'bg-yellow-500' : 'bg-green-500'}`}>
+                        {isCritico ? '!' : isAdver ? '⚠️' : '✓'}
+                     </div>
+                     <div className="flex-1">
+                        <div className="flex justify-between items-start mb-2">
+                           <div className="text-xs font-mono text-gray-500">{new Date(ins.created_at).toLocaleString('es-ES', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}</div>
+                           <button onClick={() => setModalIns(ins)} className="bg-gray-50 text-[#0B132B] font-bold px-3 py-1.5 rounded-lg text-xs border hover:bg-gray-100 transition-colors">👁️ Ver Reporte Original</button>
+                        </div>
+                        <span className={`text-[10px] font-black px-2 py-1 rounded uppercase mb-3 inline-block ${isCritico ? 'bg-red-50 text-red-600' : isAdver ? 'bg-yellow-50 text-yellow-700' : 'bg-green-50 text-green-700'}`}>
+                           {isCritico ? 'Inspección Crítica' : isAdver ? 'Advertencia' : 'Aprobada'}
+                        </span>
+                        <div className={`p-4 rounded-xl text-sm ${isCritico ? 'bg-red-50 text-red-900' : isAdver ? 'bg-yellow-50 text-yellow-900' : 'bg-green-50 text-green-900'}`}>
+                           <strong className="block mb-1">{isOk ? 'Sin Hallazgos:' : 'Hallazgos Registrados:'}</strong>
+                           {isOk ? "El conductor operó la unidad bajo todas las normas de seguridad e instructivos." : <ul className="list-disc pl-4 space-y-1">{f.map((x,idx)=><li key={idx}>{x}</li>)}</ul>}
+                        </div>
+                     </div>
                   </div>
-                </div>
-
-                {/* COL DER: GRILLA DIARIA */}
-                <div className="flex-1">
-                  <h3 className="font-bold text-[#003366] border-b-2 border-[#FFCC00] pb-2 text-lg mb-4">Grilla de Horas Diarias</h3>
-                  <div className="border rounded overflow-hidden max-h-[400px] overflow-y-auto">
-                    <table className="w-full text-sm text-center">
-                      <thead className="bg-gray-50 text-[#003366] sticky top-0 shadow-sm font-bold"><tr><th className="p-3">Fecha</th><th className="p-3">Horas Trabajadas</th><th className="p-3">Horas Acumuladas</th></tr></thead>
-                      <tbody>
-                        {desempenoDatos.grid.map((g:any) => (
-                          <tr 
-                            key={g.fecha} 
-                            onClick={() => setSelectedDateFilter(selectedDateFilter === g.dateISO ? null : g.dateISO)}
-                            className={`border-b last:border-0 cursor-pointer transition-colors ${selectedDateFilter === g.dateISO ? 'bg-blue-100 border-l-4 border-l-blue-600' : 'hover:bg-gray-50 bg-white'}`}
-                            title="Clic para ver en el mapa"
-                          >
-                            <td className="p-3 text-gray-600 font-medium">{g.fecha}</td>
-                            <td className={`p-3 font-bold ${g.horas === 'F' ? 'text-red-500' : 'text-[#003366]'}`}>{g.horas}</td>
-                            <td className="p-3 text-gray-600">{g.acumulado}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-              {/* MAPA INFERIOR CON FILTROS */}
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 mt-8">
-                <h3 className="font-bold text-[#003366] border-b-2 border-[#FFCC00] pb-2 text-lg">
-                  Ubicación de Registros ({mesDesempeno})
-                  {selectedDateFilter && <span className="ml-2 text-sm text-blue-600 font-normal bg-blue-100 px-2 py-1 rounded">(Día: {selectedDateFilter.split('-').reverse().join('/')})</span>}
-                </h3>
-                <div className="flex gap-4 items-center bg-gray-50 p-2 rounded border shadow-sm">
-                  <label className="flex items-center gap-2 text-sm font-bold text-[#003366] cursor-pointer">
-                    <input type="radio" checked={mapaVista === 'inspecciones'} onChange={() => setMapaVista('inspecciones')} className="accent-[#003366] w-4 h-4" />
-                    Inspecciones
-                  </label>
-                  <label className="flex items-center gap-2 text-sm font-bold text-[#003366] cursor-pointer">
-                    <input type="radio" checked={mapaVista === 'jornadas'} onChange={() => setMapaVista('jornadas')} className="accent-[#003366] w-4 h-4" />
-                    Inicios/Fin de Jornada
-                  </label>
-                </div>
-              </div>
-              <div className="h-[400px] rounded-xl border-2 border-gray-200 overflow-hidden shadow-inner bg-gray-100">
-                <MapComponent 
-                  inspecciones={mapDataToShow} 
-                  onVerFicha={(ins:any) => { 
-                    if(ins.isShift) { 
-                      alert("📍 Este punto es un registro automático de GPS de Jornada, no posee una ficha de inspección."); 
-                    } else { 
-                      setModalDesempeno(null); 
-                      setModalIns(ins); 
-                    }
-                  }} 
-                />
-              </div>
+                );
+              })}
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL FICHA */}
+      {/* MODAL FICHA DE INSPECCION INDIVIDUAL (Ya Existente) */}
       {modalIns && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[110] backdrop-blur-sm">
           <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl flex flex-col h-[90vh]">
-            <div className="bg-[#003366] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0"><h2 className="font-bold text-lg">Inspección: {modalIns.id}</h2><button onClick={() => setModalIns(null)} className="text-3xl leading-none hover:text-red-400">&times;</button></div>
+            <div className="bg-[#0B132B] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0"><h2 className="font-bold text-lg">Inspección: {modalIns.id}</h2><button onClick={() => setModalIns(null)} className="text-3xl leading-none hover:text-red-400">&times;</button></div>
             <div className="p-6 overflow-y-auto flex-1 bg-gray-50">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
-                <div className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#003366] block uppercase">Inspector</label><span className="text-sm font-medium">{modalIns.inspector}</span></div>
-                <div className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#003366] block uppercase">Tipo</label><span className="text-sm font-medium">{modalIns.tipo}</span></div>
+                <div className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#0B132B] block uppercase">Inspector</label><span className="text-sm font-medium">{modalIns.inspector}</span></div>
+                <div className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#0B132B] block uppercase">Tipo</label><span className="text-sm font-medium">{modalIns.tipo}</span></div>
                 {Object.entries(modalIns.datos_formulario || {}).map(([k, v]:any) => {
                   if(k.includes('fecha_') || k.includes('hora_')) return null;
-                  return (<div key={k} className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#003366] block uppercase">{k.replace(/_/g, ' ')}</label><span className="text-sm font-medium">{v}</span></div>);
+                  return (<div key={k} className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-gray-500 block uppercase">{k.replace(/_/g, ' ')}</label><span className="text-sm font-medium">{v}</span></div>);
                 })}
               </div>
-              {modalIns.fotos && modalIns.fotos.length > 0 && (<div className="mb-6"><h3 className="font-bold text-[#003366] border-b pb-2 mb-3">Fotos</h3><div className="flex gap-4 overflow-x-auto pb-2">{modalIns.fotos.map((url:string, i:number) => (<a key={i} href={url} target="_blank"><img src={url} className="h-32 rounded border hover:scale-105" /></a>))}</div></div>)}
-              <div className="bg-white p-4 rounded border-t-4 border-[#FFCC00] shadow-sm">
-                <h3 className="font-bold text-[#003366] flex items-center gap-2 mb-4">📝 Seguimiento y Acciones</h3>
+              {modalIns.fotos && modalIns.fotos.length > 0 && (<div className="mb-6"><h3 className="font-bold text-[#0B132B] border-b pb-2 mb-3">Fotos</h3><div className="flex gap-4 overflow-x-auto pb-2">{modalIns.fotos.map((url:string, i:number) => (<a key={i} href={url} target="_blank"><img src={url} className="h-32 rounded border hover:scale-105" /></a>))}</div></div>)}
+              <div className="bg-white p-4 rounded border-t-4 border-blue-500 shadow-sm">
+                <h3 className="font-bold text-[#0B132B] flex items-center gap-2 mb-4">📝 Seguimiento y Acciones</h3>
                 <div className="space-y-2 mb-4 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded border">
                   {followups.filter(f => f.inspection_id === modalIns.id).length === 0 ? <p className="text-sm text-gray-400 italic">Sin acciones registradas.</p> : (
                     followups.filter(f => f.inspection_id === modalIns.id).map(h => (
@@ -543,6 +639,24 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DESEMPEÑO DE INSPECTOR (Ya Existente) */}
+      {modalDesempeno && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
+          <div className="bg-white w-full max-w-6xl rounded-xl shadow-2xl flex flex-col h-[95vh]">
+            <div className="bg-[#0B132B] text-white p-4 flex justify-between items-center rounded-t-xl shrink-0"><h2 className="font-bold text-lg">Desempeño Inspector: {modalDesempeno}</h2><button onClick={() => { setModalDesempeno(null); setSelectedDateFilter(null); setMapaVista('inspecciones'); }} className="text-3xl leading-none hover:text-red-400">&times;</button></div>
+            <div className="p-6 overflow-y-auto flex-1 bg-white">
+              <div className="flex justify-between items-center mb-6 bg-gray-50 p-4 rounded border"><span className="font-bold text-[#0B132B]">Seleccionar Mes de Análisis:</span><input type="month" value={mesDesempeno} onChange={(e) => setMesDesempeno(e.target.value)} className="border p-2 rounded text-sm font-bold" /></div>
+              <div className="flex flex-col lg:flex-row gap-8 mb-8">
+                <div className="flex-1 space-y-4"><h3 className="font-bold text-[#0B132B] border-b-2 border-blue-500 pb-2 text-lg">Inspecciones Realizadas</h3><div className="grid grid-cols-2 gap-4"><div className="bg-[#eef4f9] p-4 rounded text-center col-span-2 border"><div className="font-bold text-[#0B132B] text-sm mb-1">Total Inspecciones</div><div className="text-3xl font-light text-[#0B132B]">{desempenoDatos.mapaIns.length}</div></div>{Object.entries(desempenoDatos.kpis).map(([k, v]:any) => (<div key={k} className="bg-gray-50 p-4 rounded text-center border"><div className="font-bold text-gray-700 text-xs mb-1 h-8 flex items-center justify-center">{k}</div><div className="text-xl font-bold text-blue-600 drop-shadow-sm">{v}</div>{k.includes('TEMAS') && Object.keys(desempenoDatos.temas).length > 0 && (<div className="mt-2 text-left text-[9px] text-gray-500 border-t pt-2 space-y-1">{Object.entries(desempenoDatos.temas).map(([tk, tv]:any) => <div key={tk} className="flex justify-between"><span>{tk}</span><b>{tv}</b></div>)}</div>)}</div>))}</div></div>
+                <div className="flex-1"><h3 className="font-bold text-[#0B132B] border-b-2 border-blue-500 pb-2 text-lg mb-4">Grilla de Horas Diarias</h3><div className="border rounded overflow-hidden max-h-[400px] overflow-y-auto"><table className="w-full text-sm text-center"><thead className="bg-gray-50 text-[#0B132B] sticky top-0 shadow-sm font-bold"><tr><th className="p-3">Fecha</th><th className="p-3">Horas Trabajadas</th><th className="p-3">Horas Acumuladas</th></tr></thead><tbody>{desempenoDatos.grid.map((g:any) => (<tr key={g.fecha} onClick={() => setSelectedDateFilter(selectedDateFilter === g.dateISO ? null : g.dateISO)} className={`border-b last:border-0 cursor-pointer transition-colors ${selectedDateFilter === g.dateISO ? 'bg-blue-100 border-l-4 border-l-blue-600' : 'hover:bg-gray-50 bg-white'}`} title="Clic para ver en el mapa"><td className="p-3 text-gray-600 font-medium">{g.fecha}</td><td className={`p-3 font-bold ${g.horas === 'F' ? 'text-red-500' : 'text-[#0B132B]'}`}>{g.horas}</td><td className="p-3 text-gray-600">{g.acumulado}</td></tr>))}</tbody></table></div></div>
+              </div>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 mt-8"><h3 className="font-bold text-[#0B132B] border-b-2 border-blue-500 pb-2 text-lg">Ubicación de Registros ({mesDesempeno}){selectedDateFilter && <span className="ml-2 text-sm text-blue-600 font-normal bg-blue-100 px-2 py-1 rounded">(Día: {selectedDateFilter.split('-').reverse().join('/')})</span>}</h3><div className="flex gap-4 items-center bg-gray-50 p-2 rounded border shadow-sm"><label className="flex items-center gap-2 text-sm font-bold text-[#0B132B] cursor-pointer"><input type="radio" checked={mapaVista === 'inspecciones'} onChange={() => setMapaVista('inspecciones')} className="accent-blue-600 w-4 h-4" />Inspecciones</label><label className="flex items-center gap-2 text-sm font-bold text-[#0B132B] cursor-pointer"><input type="radio" checked={mapaVista === 'jornadas'} onChange={() => setMapaVista('jornadas')} className="accent-blue-600 w-4 h-4" />Inicios/Fin de Jornada</label></div></div>
+              <div className="h-[400px] rounded-xl border-2 border-gray-200 overflow-hidden shadow-inner bg-gray-100"><MapComponent inspecciones={mapDataToShow} onVerFicha={(ins:any) => { if(ins.isShift) { alert("📍 Registro automático de GPS de Jornada."); } else { setModalDesempeno(null); setModalIns(ins); } }} /></div>
             </div>
           </div>
         </div>
