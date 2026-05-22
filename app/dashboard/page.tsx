@@ -234,6 +234,27 @@ export default function DashboardPage() {
   const types = Array.from(new Set(dataTabla.map(i => i.tipo))); const inspectors = Array.from(new Set(dataTabla.map(i => i.inspector)));
   const chartStacked = { labels: inspectors, datasets: types.map((type, i) => ({ label: type, backgroundColor: ['#003366', '#dc3545', '#FFCC00', '#28a745', '#6f42c1'][i % 5], data: inspectors.map(insp => dataTabla.filter(ins => ins.inspector === insp && ins.tipo === type).length) })) };
   const chartOptionsNumbers = { maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { anchor: 'end' as const, align: 'end' as const, font: { weight: 'bold' as const }, formatter: (v:number) => v > 0 ? v : '' } }, scales: { y: { beginAtZero: true, grace: '10%' } } };
+  const optionsInspectorChart = {
+    ...chartOptionsNumbers,
+    onClick: (e: any, elements: any) => {
+      if (elements.length > 0) {
+        const label = inspectoresOrdenados[elements[0].index][0];
+        setSelectedInspectorChart(label === selectedInspectorChart ? null : label);
+      } else setSelectedInspectorChart(null);
+    }
+  };
+
+  const optionsTypeChart = {
+    ...chartOptionsNumbers,
+    onClick: (e: any, elements: any) => {
+      if (elements.length > 0) {
+        const label = tiposOrdenados[elements[0].index][0];
+        setSelectedTypeChart(label === selectedTypeChart ? null : label);
+      } else { setSelectedTypeChart(null); setSelectedInspectorChart(null); }
+    }
+  };
+
+  const dataFinalTabla = selectedTypeChart ? dataTabla.filter(ins => ins.tipo === selectedTypeChart) : dataTabla;
 
   // --- LÓGICA HORAS (Desempeño) ---
   const getHorasRango = (nombreInsp: string, inicioYMD: string, finYMD: string) => {
