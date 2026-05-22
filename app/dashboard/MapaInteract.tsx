@@ -74,16 +74,26 @@ export default function MapComponent({ inspecciones, onVerFicha }: any) {
               icon={blueIcon}
             >
               <Popup>
-                <div className="text-center p-1" style={{ minWidth: '150px' }}>
-                  <strong className="block text-[#003366] text-sm">{ins.inspector}</strong>
-                  <span className="text-[10px] text-gray-500 uppercase font-bold block mb-2">{ins.tipo}</span>
-                  <button 
-                    onClick={() => onVerFicha(ins)} 
-                    className="bg-[#FFCC00] text-[#003366] px-3 py-1 rounded font-black text-xs w-full shadow-md hover:bg-yellow-500 transition-colors"
-                  >
-                    Ver Ficha
-                  </button>
-                </div>
+<div className="text-center p-1 min-w-[140px]">
+                {ins.isShift ? (
+                  <>
+                    <strong className="block text-[#003366] text-[10px] font-black uppercase mb-1 tracking-wider border-b pb-1">
+                      {ins.tipo.replace('📍 ', '')}
+                    </strong>
+                    <span className="text-xl font-black text-blue-600 block my-2">
+                      {new Date(ins.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <strong className="block text-[#003366] mb-1">{ins.inspector}</strong>
+                    <span className="text-[10px] bg-gray-100 px-2 py-1 rounded block mb-2 font-bold text-gray-600">{ins.tipo}</span>
+                    <button onClick={() => onVerFicha(ins)} className="bg-[#FFCC00] text-[#003366] px-3 py-1.5 rounded font-bold text-xs w-full shadow-sm hover:bg-yellow-400">
+                      VER FICHA
+                    </button>
+                  </>
+                )}
+              </div>
               </Popup>
             </Marker>
           ) : null
