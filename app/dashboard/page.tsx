@@ -49,7 +49,7 @@ export default function DashboardPage() {
   // Estados ABM y Flota (MODIFICADOS PARA EDICIÓN)
   const [abmTab, setAbmTab] = useState('conductores');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formCond, setFormCond] = useState({ legajo: '', nombre: '', apellido: '', telefono: '' });
+  const [formCond, setFormCond] = useState({ legajo: '', nombres: '', apellido: '', telefono: '' });
   const [formUni, setFormUni] = useState({ numero: '' });
   const [formServ, setFormServ] = useState({ nombre: '', temporada: '' });
   const [modalDriver, setModalDriver] = useState<any>(null);
@@ -173,8 +173,17 @@ export default function DashboardPage() {
   const handleSaveABM = async (e: any, type: string) => {
     e.preventDefault();
     if(type === 'conductores') {
-      if (editingId) await supabase.from('conductores').update({ legajo: formCond.legajo, nombre: formCond.nombre, apellido: formCond.apellido, telefono: formCond.telefono }).eq('id', editingId);
-      else await supabase.from('conductores').insert([{ legajo: formCond.legajo, nombre: formCond.nombre, apellido: formCond.apellido, telefono: formCond.telefono, activo: true }]);
+      const fullName = `${formCond.legajo} - ${formCond.apellido}, ${formCond.nombres}`;
+      const payloadCond = { 
+        legajo: formCond.legajo, 
+        nombres: formCond.nombres, 
+        apellido: formCond.apellido, 
+        telefono: formCond.telefono, 
+        nombre: fullName 
+      };
+      
+      if (editingId) await supabase.from('conductores').update(payloadCond).eq('id', editingId);
+      else await supabase.from('conductores').insert([{ ...payloadCond, activo: true }]);
     }
     if(type === 'unidades') {
       if (editingId) await supabase.from('unidades').update({ numero: formUni.numero }).eq('id', editingId);
@@ -184,8 +193,12 @@ export default function DashboardPage() {
       if (editingId) await supabase.from('servicios').update({ nombre: formServ.nombre, temporada: formServ.temporada }).eq('id', editingId);
       else await supabase.from('servicios').insert([{ nombre: formServ.nombre, temporada: formServ.temporada, activo: true }]);
     }
-    setEditingId(null); setFormCond({ legajo: '', nombres: '', apellido: '', telefono: '' }); setFormUni({ numero: '' }); setFormServ({ nombre: '', temporada: '' });
-    alert(editingId ? "Actualizado correctamente" : "Guardado correctamente"); fetchCatalogosAdmin();
+    setEditingId(null); 
+    setFormCond({ legajo: '', nombres: '', apellido: '', telefono: '' }); 
+    setFormUni({ numero: '' }); 
+    setFormServ({ nombre: '', temporada: '' });
+    alert(editingId ? "Actualizado correctamente" : "Guardado correctamente"); 
+    fetchCatalogosAdmin();
   };
 
   const activarTemporada = async (temp: string) => {
