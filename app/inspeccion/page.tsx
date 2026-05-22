@@ -121,7 +121,7 @@ export default function InspeccionPage() {
     e.preventDefault();
     const esAspirante = tipoInspeccion === '3-SEGUIMIENTO DE PERSONAL' && subtipoPersonal === 'Aspirante';
     if (!esAspirante && formData.conductor) {
-      cconst existe = listas.conductores.find((c:any) => c.fullName === formData.conductor);
+      const existe = listas.conductores.find((c:any) => c.fullName === formData.conductor);
       if (!existe && !tipoInspeccion.includes('TEMAS') && !tipoInspeccion.includes('DESCANSO')) {
         alert("Atención: Debe seleccionar un conductor válido de la lista."); return;
       }
