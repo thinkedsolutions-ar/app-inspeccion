@@ -7,6 +7,7 @@ import { Bar, Line } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import dynamic from 'next/dynamic';
 import Papa from 'papaparse';
+import FichaVisualizador from '@/components/FichaVisualizador';
 
 const MapComponent = dynamic(() => import('./MapaInteract'), { ssr: false });
 
@@ -574,10 +575,7 @@ export default function DashboardPage() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
                 <div className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#0B132B] block uppercase">Inspector</label><span className="text-sm font-medium">{modalIns.inspector}</span></div>
                 <div className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-[#0B132B] block uppercase">Tipo</label><span className="text-sm font-medium">{modalIns.tipo}</span></div>
-                {Object.entries(modalIns.datos_formulario || {}).map(([k, v]:any) => {
-                  if(k.includes('fecha_') || k.includes('hora_')) return null;
-                  return (<div key={k} className="bg-white p-3 rounded shadow-sm border"><label className="text-[10px] font-bold text-gray-500 block uppercase">{k.replace(/_/g, ' ')}</label><span className="text-sm font-medium">{v}</span></div>);
-                })}
+                <FichaVisualizador ins={modalIns} />
               </div>
               {modalIns.fotos && modalIns.fotos.length > 0 && (<div className="mb-6"><h3 className="font-bold text-[#0B132B] border-b pb-2 mb-3">Fotos</h3><div className="flex gap-4 overflow-x-auto pb-2">{modalIns.fotos.map((url:string, i:number) => (<a key={i} href={url} target="_blank"><img src={url} className="h-32 rounded border hover:scale-105" /></a>))}</div></div>)}
               <div className="bg-white p-4 rounded border-t-4 border-blue-500 shadow-sm">
