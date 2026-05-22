@@ -155,6 +155,16 @@ export default function DashboardPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const downloadCSVTemplate = (type: string) => {
+      let csv = '';
+      if(type === 'conductores') csv = 'legajo,nombres,apellido,telefono\n101,Juan,Perez,2604123456';
+      if(type === 'unidades') csv = 'numero\n145\n146';
+      if(type === 'servicios') csv = 'nombre\n540 - Ciudad\n570 - Directo';
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `plantilla_${type}.csv`; a.click();
+  };
+  
   const handleCSVUpload = (e: any, type: string) => {
     const file = e.target.files[0]; if(!file) return;
     Papa.parse(file, { header: true, complete: async (res) => {
