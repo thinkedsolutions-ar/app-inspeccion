@@ -312,7 +312,7 @@ export default function DashboardPage() {
             <select value={filtroInspector} onChange={(e)=>setFiltroInspector(e.target.value)} className="border border-gray-200 p-2 rounded-lg text-sm bg-white font-bold text-[#0B132B]"><option value="">Todos los Inspectores</option>{inspectoresUnicos.map((i:any) => <option key={i} value={i}>{i}</option>)}</select>
             <select value={filtroTipo} onChange={(e)=>setFiltroTipo(e.target.value)} className="border border-gray-200 p-2 rounded-lg text-sm bg-white font-bold text-[#0B132B] max-w-xs"><option value="">Todos los Tipos</option>{tiposUnicos.map((t:any) => <option key={t} value={t}>{t}</option>)}</select>
           </div>
-          <div className="flex items-center gap-3"><div className="text-right"><div className="font-bold text-[#0B132B] text-sm leading-tight">{adminUser.nombre}</div><div className="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Fleet Manager</div></div><div className="w-10 h-10 bg-[#0B132B] rounded-full flex items-center justify-center text-white font-bold shadow-md">A</div></div>
+          <div className="flex items-center gap-3"><div className="text-right"><div className="font-bold text-[#0B132B] text-sm leading-tight">{adminUser.nombre}</div><div className="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Usuario</div></div><div className="w-10 h-10 bg-[#0B132B] rounded-full flex items-center justify-center text-white font-bold shadow-md">A</div></div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#f8f9fa]">
@@ -404,6 +404,45 @@ export default function DashboardPage() {
                 <div className="h-full flex flex-col bg-white rounded-xl shadow-sm border p-4">
                   <div className="mb-4 flex justify-between items-center"><h2 className="text-[#0B132B] font-bold text-lg">📍 Mapa de Inspecciones</h2><span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs font-bold border border-blue-200">{dataTabla.length} Puntos</span></div>
                   <div className="flex-1 rounded-xl overflow-hidden border"><MapComponent inspecciones={dataTabla} onVerFicha={(ins:any) => setModalIns(ins)} /></div>
+                </div>
+              )}
+
+              {/* === USUARIOS === */}
+              {activeTab === 'usuarios' && (
+                <div className="space-y-6 animate-in fade-in duration-500">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 className="text-[#0B132B] font-bold mb-4">Agregar Nuevo Usuario</h3>
+                    <form onSubmit={handleCreateUser} className="flex flex-wrap gap-4 items-end">
+                      <div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Usuario (Login)</label><input type="text" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required /></div>
+                      <div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Clave</label><input type="password" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required /></div>
+                      <div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombre Completo</label><input type="text" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={newUser.nombre} onChange={e => setNewUser({...newUser, nombre: e.target.value})} required /></div>
+                      <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Rol</label><select className="w-full border p-2 rounded-xl bg-white text-sm" value={newUser.rol} onChange={e => setNewUser({...newUser, rol: e.target.value})}><option value="Inspector">Inspector</option><option value="Admin">Admin</option></select></div>
+                      <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Jornada Mínima</label><select className="w-full border p-2 rounded-xl bg-white text-sm" value={newUser.jornada} onChange={e => setNewUser({...newUser, jornada: e.target.value})}><option value="SI">Requerida (Sí)</option><option value="NO">Omitir (No)</option></select></div>
+                      <button type="submit" className="bg-[#0B132B] text-white font-bold px-6 py-2 rounded-xl text-sm h-[38px] hover:bg-blue-900 transition-colors">GUARDAR</button>
+                    </form>
+                  </div>
+                  
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-gray-50/50 text-gray-400 uppercase text-xs font-bold tracking-wider">
+                        <tr><th className="p-4 pl-6">Usuario</th><th className="p-4">Nombre</th><th className="p-4 text-center">Rol</th><th className="p-4 text-center">Jornada</th><th className="p-4 text-right pr-6">Acciones</th></tr>
+                      </thead>
+                      <tbody>
+                        {usuarios.map(u => (
+                          <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
+                            <td className="p-4 pl-6 font-bold text-[#0B132B]">{u.username}</td>
+                            <td className="p-4 font-medium text-gray-600">{u.nombre}</td>
+                            <td className="p-4 text-center"><span className={`px-3 py-1 rounded-lg text-[10px] font-bold text-white ${u.rol === 'Admin' ? 'bg-[#0B132B]' : 'bg-gray-500'}`}>{u.rol}</span></td>
+                            <td className="p-4 text-center"><span className={`px-3 py-1 rounded-lg text-[10px] font-bold text-white ${u.jornada === 'SI' ? 'bg-green-500' : 'bg-red-500'}`}>{u.jornada === 'SI' ? 'Requerida' : 'Omitida'}</span></td>
+                            <td className="p-4 pr-6 text-right flex gap-2 justify-end">
+                              <button onClick={() => handleResetPassword(u.id, u.username)} className="text-blue-600 font-bold hover:bg-blue-100 transition-colors text-xs bg-blue-50 px-3 py-1.5 rounded-lg">🔑 Reset Clave</button>
+                              <button onClick={() => handleDeleteUser(u.id, u.username)} className="text-red-600 font-bold hover:bg-red-100 transition-colors text-xs bg-red-50 px-3 py-1.5 rounded-lg">❌ Eliminar</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 
