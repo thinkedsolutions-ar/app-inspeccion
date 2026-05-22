@@ -223,6 +223,42 @@ export default function InspeccionPage() {
     </div>
   );
 
+  const renderDescansoTable = () => {
+    const items = [
+      { k: 'limp_int', l: 'Limpieza general interior' }, { k: 'cocina', l: 'Cocina' },
+      { k: 'bano', l: 'Baño' }, { k: 'basura', l: 'Basura retirada' },
+      { k: 'insumos', l: 'Reposición insumos' }, { k: 'danos', l: 'Control daños' },
+      { k: 'llaves', l: 'Revisión llaves' }, { k: 'ventilacion', l: 'Ventilación' }, { k: 'limp_ext', l: 'Limpieza exterior' },
+    ];
+    return (
+      <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm">
+        <table className="w-full text-sm text-center bg-white border-collapse">
+          <thead className="bg-[#003366] text-white text-[10px] uppercase">
+            <tr><th className="p-2 text-left">Controlar</th><th className="p-2">Estado</th><th className="p-2">Obs.</th></tr>
+          </thead>
+          <tbody>
+            {items.map((item, idx) => (
+              <tr key={item.k} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <td className="p-2 text-left border-t border-r text-xs">{item.l}</td>
+                <td className="p-2 border-t border-r">
+                  <div className="flex flex-col gap-1">
+                    {['E', 'MB', 'B', 'R'].map(opt => (
+                      <label key={opt} className="flex items-center gap-1 text-[10px] cursor-pointer">
+                        <input type="radio" name={`descanso_${item.k}`} value={opt} checked={formData[`descanso_${item.k}`] === opt} 
+                          onChange={() => handleChange(`descanso_${item.k}`, opt)} className="accent-[#003366]" required /> {opt}
+                      </label>
+                    ))}
+                  </div>
+                </td>
+                <td className="p-1 border-t"><textarea className="w-full border rounded p-1 text-xs" rows={2} value={formData[`obs_${item.k}`] || ''} onChange={(e) => handleChange(`obs_${item.k}`, e.target.value)}></textarea></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };  
+
   // --- BLOQUEO POR GPS ---
   if (locationEnabled === false) {
     return (
