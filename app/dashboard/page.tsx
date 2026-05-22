@@ -196,7 +196,7 @@ export default function DashboardPage() {
     const file = e.target.files[0]; if(!file) return;
     Papa.parse(file, { header: true, complete: async (res) => {
       const data = res.data as any[];
-      let payload = [];
+      let payload: any[] = [];
       if(type === 'conductores') payload = data.filter(r=>r.legajo).map(r => ({ legajo: r.legajo, apellido: r.apellido, telefono: r.telefono, nombre: `${r.legajo} - ${r.nombre_pila} ${r.apellido}`, activo: true }));
       if(type === 'unidades') payload = data.filter(r=>r.numero).map(r => ({ numero: r.numero, activo: true }));
       if(type === 'servicios') payload = data.filter(r=>r.nombre).map(r => ({ nombre: r.nombre, activo: true }));
