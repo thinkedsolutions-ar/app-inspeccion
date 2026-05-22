@@ -461,7 +461,8 @@ export default function InspeccionPage() {
                     <option value="SAN RAFAEL">SAN RAFAEL</option>
                     <option value="GENERAL ALVEAR">GENERAL ALVEAR</option>
                   </select>
-                  <div className="p-4 bg-gray-50 border rounded text-sm text-center">Registro de limpieza (Simplificado para vista)</div>
+                  {/* AQUÍ LLAMAMOS A LA TABLA DE DESCANSO REAL */}
+                  {renderDescansoTable()}
                 </>
               )}
 
