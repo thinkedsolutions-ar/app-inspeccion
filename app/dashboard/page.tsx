@@ -149,10 +149,25 @@ export default function DashboardPage() {
 
   const editItem = (item: any, type: string) => {
     setEditingId(item.id);
-    if(type === 'conductores') payload = data.filter(r=>r.legajo).map(r => ({ legajo: r.legajo, apellido: r.apellido, telefono: r.telefono, nombre: r.nombre, activo: true }));
+    if (type === 'conductores') setFormCond({ legajo: item.legajo || '', nombres: item.nombres || '', apellido: item.apellido || '', telefono: item.telefono || '' });
     if (type === 'unidades') setFormUni({ numero: item.numero || '' });
     if (type === 'servicios') setFormServ({ nombre: item.nombre || '', temporada: item.temporada || '' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCSVUpload = (e: any, type: string) => {
+    const file = e.target.files[0]; if(!file) return;
+    Papa.parse(file, { header: true, complete: async (res) => {
+      const data = res.data as any[];
+      let payload: any[] = [];
+      if(type === 'conductores') payload = data.filter(r=>r.legajo).map(r => ({ legajo: r.legajo, apellido: r.apellido, telefono: r.telefono, nombre: r.nombre, activo: true }));
+      if(type === 'unidades') payload = data.filter(r=>r.numero).map(r => ({ numero: r.numero, activo: true }));
+      if(type === 'servicios') payload = data.filter(r=>r.nombre).map(r => ({ nombre: r.nombre, activo: true }));
+      
+      const col = type === 'conductores' ? 'nombre' : (type === 'unidades' ? 'numero' : 'nombre');
+      await supabase.from(type).upsert(payload, { onConflict: col });
+      alert(`Importación completada para ${type}`); fetchCatalogosAdmin();
+    }});
   };
 
   const handleSaveABM = async (e: any, type: string) => {
