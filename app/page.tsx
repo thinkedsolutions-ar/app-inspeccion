@@ -15,7 +15,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
-    // Consultamos en nuestra tabla 'users' de Supabase
+    // Consultamos en nuestra tabla 'users' de Supabase.......
     const { data, error: dbError } = await supabase
       .from('users')
       .select('*')

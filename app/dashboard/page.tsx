@@ -48,7 +48,7 @@ export default function DashboardPage() {
   const [mapaVista, setMapaVista] = useState<'inspecciones' | 'jornadas'>('inspecciones');
   const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(null);
 
-  // Estados ABM y Flota
+  // Estados ABM y Flota.......
   const [abmTab, setAbmTab] = useState('conductores');
   const [formCond, setFormCond] = useState({ legajo: '', nombre_pila: '', apellido: '', telefono: '' });
   const [formUni, setFormUni] = useState({ numero: '' });
