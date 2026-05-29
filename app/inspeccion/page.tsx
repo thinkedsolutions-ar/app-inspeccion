@@ -456,8 +456,8 @@ export default function InspeccionPage() {
                       <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo SUBE</div>
                       <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_func || ''} onChange={(e)=>handleChange('sube_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
                       
-                      <div className="font-bold self-center text-xs text-[#003366]">Cant. de Func. Equipo SUBE</div>
-                      <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_cant_func || ''} onChange={(e)=>handleChange('sube_cant_func',e.target.value)} /></div>
+                      {/*<div className="font-bold self-center text-xs text-[#003366]">Cant. de Func. Equipo SUBE</div>
+                      <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_cant_func || ''} onChange={(e)=>handleChange('sube_cant_func',e.target.value)} /></div>*/}
                       
                       <div className="font-bold self-center text-xs text-[#003366]">Inspecciones SUBE realizadas</div>
                       <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_inspecciones || ''} onChange={(e)=>handleChange('sube_inspecciones',e.target.value)} /></div>
