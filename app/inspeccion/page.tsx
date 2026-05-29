@@ -25,13 +25,15 @@ export default function InspeccionPage() {
   const [nuevoComentario, setNewComentario] = useState('');
   const [historialChat, setHistorialChat] = useState<any[]>([]);
 
+  // INTEGRACIÓN SINIESTROS: Modal y Estado de Carga
+  const [showSiniestroModal, setShowSiniestroModal] = useState(false);
+
   useEffect(() => {
     const session = localStorage.getItem('buttini_user');
     if (!session) { window.location.href = '/'; return; }
     const userData = JSON.parse(session);
     setUser(userData);
     
-    // 1. OBLIGAR A COMPARTIR UBICACIÓN
     navigator.geolocation.getCurrentPosition(
       () => setLocationEnabled(true),
       (err) => setLocationEnabled(false)
@@ -46,6 +48,20 @@ export default function InspeccionPage() {
     fetchPendientes(userData.nombre);
   }, []);
 
+  // ESCUCHAR SEÑAL DE ÉXITO DESDE LA OTRA APP (postMessage)
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && event.data.status === 'success_siniestro') {
+        handleChange('siniestro_cargado_mapa', 'SÍ');
+        alert("🚨 ¡Siniestro registrado en el mapa de siniestralidad con éxito!");
+        setShowSiniestroModal(false); // Cierra el modal automáticamente
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   const fetchCatalogos = async () => {
     const [resCond, resUni, resServ] = await Promise.all([
       supabase.from('conductores').select('*').eq('activo', true),
@@ -53,7 +69,6 @@ export default function InspeccionPage() {
       supabase.from('servicios').select('nombre').eq('activo', true).order('nombre')
     ]);
     
-    // Concatenar y ordenar conductores "al vuelo"
     const condFormatted = (resCond.data || []).map(c => ({
       ...c,
       fullName: `${c.legajo || ''} - ${c.apellido || ''}, ${c.nombre || ''}`
@@ -63,7 +78,6 @@ export default function InspeccionPage() {
   };
 
   const fetchPendientes = async (inspectorNombre: string) => {
-    // Buscar todos los seguimientos activos de este inspector
     const { data: follows } = await supabase.from('followups').select('*').order('created_at', { ascending: true });
     if (!follows) return;
     
@@ -91,7 +105,7 @@ export default function InspeccionPage() {
     setLoading(true);
     await supabase.from('followups').insert([{ inspection_id: modalSeg.id, usuario: user.nombre, accion: nuevoComentario }]);
     setNewComentario('');
-    abrirModalSeguimiento(modalSeg); // Recargar chat
+    abrirModalSeguimiento(modalSeg);
     setLoading(false);
   };
 
@@ -116,10 +130,19 @@ export default function InspeccionPage() {
     });
   };
 
-  const handleChange = (campo: string, valor: string) => setFormData((prev: any) => ({ ...prev, [campo]: valor }));
+  const handleChange = (campo: string, valor: string) => {
+    setFormData((prev: any) => ({ ...prev, [campo]: valor }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // BLOQUEO: Si es un siniestro, obligar a que se haya cargado en el mapa de siniestralidad
+    if (tipoInspeccion === '4-SEGUIMIENTO DE TEMAS' && formData.tema_tipo === 'Siniestros' && formData.siniestro_cargado_mapa !== 'SÍ') {
+      alert("❌ Proceso Incompleto: Debe registrar el siniestro en el mapa (botón rojo) antes de poder guardar el reporte.");
+      return;
+    }
+
     const esAspirante = tipoInspeccion === '3-SEGUIMIENTO DE PERSONAL' && subtipoPersonal === 'Aspirante';
     if (!esAspirante && formData.conductor) {
       const existe = listas.conductores.find((c:any) => c.fullName === formData.conductor);
@@ -135,7 +158,8 @@ export default function InspeccionPage() {
       if (files.length > 0) {
         for (const file of files) {
           const fileName = `${idInspeccion}_${Math.random()}.${file.name.split('.').pop()}`;
-          await supabase.storage.from('fotos-inspecciones').upload(fileName, file);
+          const { error: uploadError } = await supabase.storage.from('fotos-inspecciones').upload(fileName, file);
+          if (uploadError) { alert(`Error al subir la imagen: ${uploadError.message}`); setLoading(false); return; }
           const { data: urlData } = supabase.storage.from('fotos-inspecciones').getPublicUrl(fileName);
           fotosUrls.push(urlData.publicUrl);
         }
@@ -151,10 +175,9 @@ export default function InspeccionPage() {
         }]);
         alert("¡Inspección guardada con éxito!"); window.location.reload();
       });
-    } catch (err) { alert("Error al guardar."); } finally { setLoading(false); }
+    } catch (err) { alert("Error al guardar."); }
   };
 
-  // --- COMPONENTES UI ---
   const renderSearchFields = (includesInstructor = false) => {
     const esAspirante = tipoInspeccion === '3-SEGUIMIENTO DE PERSONAL' && subtipoPersonal === 'Aspirante';
     return (
@@ -191,22 +214,16 @@ export default function InspeccionPage() {
     <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm">
       <table className="w-full text-sm text-center bg-white border-collapse">
         <thead className="bg-[#003366] text-white">
-          <tr><th colSpan={options.length + 1} className="p-2 font-bold uppercase">{title}</th></tr>
-          <tr className="bg-[#002244] text-xs">
-            <th className="p-2 text-left w-1/2">ITEM</th>
-            {options.map(o => <th key={o} className="p-2">{o}</th>)}
-          </tr>
+          <tr><th colSpan={options.length + 1} className="p-2 font-bold uppercase text-xs">{title}</th></tr>
+          <tr className="bg-[#002244] text-xs"><th className="p-2 text-left w-1/2">ITEM</th>{options.map(o => <th key={o} className="p-2">{o}</th>)}</tr>
         </thead>
         <tbody>
           {items.map((item, idx) => (
             <tr key={item.k} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-              <td className="p-2 text-left border-t border-r border-gray-200 text-xs font-medium">{item.l}</td>
+              <td className="p-2 text-left border-t border-r text-xs font-medium">{item.l}</td>
               {options.map(opt => (
-                <td key={opt} className="p-2 border-t border-gray-200" onClick={() => handleChange(`${prefix}_${item.k}`, opt)}>
-                  <input type="radio" name={`${prefix}_${item.k}`} value={opt} 
-                    checked={formData[`${prefix}_${item.k}`] === opt} 
-                    onChange={() => handleChange(`${prefix}_${item.k}`, opt)}
-                    className="w-4 h-4 cursor-pointer accent-[#003366]" required />
+                <td key={opt} className="p-2 border-t" onClick={() => handleChange(`${prefix}_${item.k}`, opt)}>
+                  <input type="radio" name={`${prefix}_${item.k}`} value={opt} checked={formData[`${prefix}_${item.k}`] === opt} onChange={() => handleChange(`${prefix}_${item.k}`, opt)} className="w-4 h-4 cursor-pointer accent-[#003366]" required />
                 </td>
               ))}
             </tr>
@@ -216,9 +233,7 @@ export default function InspeccionPage() {
       {hasObservations && (
         <div className="p-2 border-t border-[#003366] bg-white flex flex-col sm:flex-row gap-2 items-start sm:items-center">
           <label className="text-[10px] font-bold text-[#003366] uppercase w-24 text-left pl-1">OBSERVACIONES</label>
-          <input type="text" className="flex-1 border border-gray-300 p-2 rounded text-xs bg-white w-full" 
-            value={formData[`obs_${prefix}`] || ''} 
-            onChange={(e) => handleChange(`obs_${prefix}`, e.target.value)} />
+          <input type="text" className="flex-1 border border-gray-300 p-2 rounded text-xs bg-white w-full" value={formData[`obs_${prefix}`] || ''} onChange={(e) => handleChange(`obs_${prefix}`, e.target.value)} />
         </div>
       )}
     </div>
@@ -245,8 +260,7 @@ export default function InspeccionPage() {
                   <div className="flex flex-col gap-1">
                     {['E', 'MB', 'B', 'R'].map(opt => (
                       <label key={opt} className="flex items-center gap-1 text-[10px] cursor-pointer">
-                        <input type="radio" name={`descanso_${item.k}`} value={opt} checked={formData[`descanso_${item.k}`] === opt} 
-                          onChange={() => handleChange(`descanso_${item.k}`, opt)} className="accent-[#003366]" required /> {opt}
+                        <input type="radio" name={`descanso_${item.k}`} value={opt} checked={formData[`descanso_${item.k}`] === opt} onChange={() => handleChange(`descanso_${item.k}`, opt)} className="accent-[#003366]" required /> {opt}
                       </label>
                     ))}
                   </div>
@@ -258,16 +272,12 @@ export default function InspeccionPage() {
         </table>
       </div>
     );
-  };  
+  };
 
-  // --- BLOQUEO POR GPS ---
   if (locationEnabled === false) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#003366] text-white p-6 text-center">
-        <span className="text-6xl mb-4">📍</span>
-        <h1 className="text-2xl font-bold mb-2">Ubicación Requerida</h1>
-        <p className="text-sm opacity-80 mb-6">Para utilizar la aplicación debe permitir el acceso a su ubicación GPS en el navegador.</p>
-        <button onClick={() => window.location.reload()} className="bg-[#FFCC00] text-[#003366] font-bold py-3 px-6 rounded-lg">REINTENTAR</button>
+        <span className="text-6xl mb-4">📍</span><h1 className="text-2xl font-bold mb-2">Ubicación Requerida</h1><p className="text-sm opacity-80 mb-6">Para utilizar la aplicación debe permitir el acceso a su ubicación GPS en el navegador.</p><button onClick={() => window.location.reload()} className="bg-[#FFCC00] text-[#003366] font-bold py-3 px-6 rounded-lg">REINTENTAR</button>
       </div>
     );
   }
@@ -279,9 +289,9 @@ export default function InspeccionPage() {
       <nav className="bg-[#333] text-white p-3 flex justify-between items-center sticky top-0 z-40">
         <div className="flex flex-col"><span className="font-bold text-sm">👤 {user.nombre}</span><span className="text-[10px] text-gray-400 uppercase">{estadoJornada}</span></div>
         <div className="flex gap-2">
-          {estadoJornada === 'TRABAJANDO' && <button onClick={() => logShift('INICIO_REF')} className="bg-orange-500 px-3 py-1 rounded text-xs font-bold border border-white">☕ PAUSA</button>}
-          {estadoJornada === 'REFRIGERIO' && <button onClick={() => logShift('FIN_REF')} className="bg-green-500 px-3 py-1 rounded text-xs font-bold border border-white">▶ REANUDAR</button>}
-          {estadoJornada === 'TRABAJANDO' && <button onClick={() => logShift('FIN')} className="bg-[#003366] px-3 py-1 rounded text-xs font-bold text-yellow-400 border border-white">FIN DÍA</button>}
+          {estadoJornada === 'TRABAJANDO' && <button type="button" onClick={() => logShift('INICIO_REF')} className="bg-orange-500 px-3 py-1 rounded text-xs font-bold border border-white">☕ PAUSA</button>}
+          {estadoJornada === 'REFRIGERIO' && <button type="button" onClick={() => logShift('FIN_REF')} className="bg-green-500 px-3 py-1 rounded text-xs font-bold border border-white">▶ REANUDAR</button>}
+          {estadoJornada === 'TRABAJANDO' && <button type="button" onClick={() => logShift('FIN')} className="bg-[#003366] px-3 py-1 rounded text-xs font-bold border border-white text-yellow-400">FIN DÍA</button>}
         </div>
       </nav>
 
@@ -289,27 +299,17 @@ export default function InspeccionPage() {
         <div className="flex flex-col items-center justify-center p-10 mt-10">
           <div className="bg-white p-8 rounded shadow text-center max-w-sm w-full">
             <h2 className="text-xl font-bold mb-4 text-[#003366]">¿Iniciar Jornada?</h2>
-            <button onClick={() => logShift('INICIO')} className="w-full bg-[#003366] text-white p-3 rounded font-bold uppercase">{loading ? '...' : 'Sí, Iniciar'}</button>
+            <button onClick={() => logShift('INICIO')} className="w-full bg-[#003366] text-white p-3 rounded font-bold uppercase" disabled={loading}>{loading ? '...' : 'Sí, Iniciar'}</button>
           </div>
-        </div>
-      )}
-
-      {estadoJornada === 'REFRIGERIO' && (
-        <div className="fixed inset-0 bg-[#003366]/95 flex flex-col items-center justify-center text-center p-10 z-[60]">
-          <h1 className="text-4xl font-bold text-orange-400 mb-4">☕ EN REFRIGERIO</h1>
-          <button onClick={() => logShift('FIN_REF')} className="bg-green-600 text-white px-10 py-4 rounded font-bold text-lg">REANUDAR TRABAJO</button>
         </div>
       )}
 
       {estadoJornada === 'TRABAJANDO' && (
         <main className="p-2 md:p-4 max-w-3xl mx-auto space-y-4">
-          
-          {/* BANDEJA DE SEGUIMIENTO (AMARILLA) */}
           {pendientes.length > 0 && (
             <div className="bg-white rounded shadow-sm border border-gray-200 overflow-hidden">
               <div className="bg-[#FFCC00] text-[#003366] p-3 font-bold flex justify-between items-center cursor-pointer" onClick={() => setShowSeguimiento(!showSeguimiento)}>
-                <span>⚠️ TEMAS EN SEGUIMIENTO ({pendientes.length})</span>
-                <span>{showSeguimiento ? '▼' : '▶'}</span>
+                <span>⚠️ TEMAS EN SEGUIMIENTO ({pendientes.length})</span><span>{showSeguimiento ? '▼' : '▶'}</span>
               </div>
               {showSeguimiento && (
                 <div className="p-2">
@@ -318,9 +318,7 @@ export default function InspeccionPage() {
                     <tbody>
                       {pendientes.map(p => (
                         <tr key={p.id} className="border-b">
-                          <td className="p-2">{new Date(p.created_at).toLocaleDateString()}</td>
-                          <td className="p-2 font-bold">{p.tipo}</td>
-                          <td className="p-2 text-center"><button onClick={() => abrirModalSeguimiento(p)} className="bg-[#FFCC00] text-[#003366] px-3 py-1 rounded font-bold">VER</button></td>
+                          <td className="p-2">{new Date(p.created_at).toLocaleDateString()}</td><td className="p-2 font-bold">{p.tipo}</td><td className="p-2 text-center"><button onClick={() => abrirModalSeguimiento(p)} className="bg-[#FFCC00] text-[#003366] px-3 py-1 rounded font-bold">VER</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -351,7 +349,7 @@ export default function InspeccionPage() {
                   <option value="2-EMOP">2 - EMOP</option>
                   <option value="3-SEGUIMIENTO DE PERSONAL">3 - SEGUIMIENTO DE PERSONAL</option>
                   <option value="4-SEGUIMIENTO DE TEMAS">4 - SEGUIMIENTO DE TEMAS</option>
-                  <option value="5-INSPECCION AREA DE DESCANSO">5 - AREA DE DESCANSO</option>
+                  <option value="5-INSPECCION AREA DE DESCANSO">5 - INSPECCION AREA DE DESCANSO</option>
                 </select>
               </div>
 
@@ -371,8 +369,6 @@ export default function InspeccionPage() {
               {(tipoInspeccion === '1-INSPECTOR EN CALLE' || subtipoPersonal === 'Permanente') && (
                 <>
                   {renderSearchFields()}
-                  
-                  {/* ACLARACIÓN DE CRITERIOS */}
                   <div className="bg-blue-50 border-l-4 border-blue-600 p-4 mb-6 rounded shadow-sm text-xs text-[#003366]">
                     <strong className="block mb-1 text-sm uppercase">Criterios de Calificación:</strong>
                     <ul className="list-disc pl-4 space-y-1">
@@ -381,17 +377,10 @@ export default function InspeccionPage() {
                       <li><b>4 - 5:</b> Aceptable</li>
                     </ul>
                   </div>
-
                   {renderRatingTable("Limpieza de la Unidad", [{k:'int', l:'Interior'}, {k:'ext', l:'Exterior'}, {k:'cab', l:'Cabezales'}, {k:'bano', l:'Baño'}, {k:'ac', l:'A/C - CALEF.'}], ['1','2','3','4','5','N/C'], "limp")}
+                  {renderRatingTable("Evaluación del Conductor", [{k:'horarios', l:'Cumplimiento Horarios'}, {k:'uniforme', l:'Uniforme'}, {k:'atencion', l:'Atención al Usuario'}], ['1','2','3','4','5','N/C'], "eval")}
                   
-                  {/* EVALUACIÓN DEL CONDUCTOR (Actualizado) */}
-                  {renderRatingTable("Evaluación del Conductor", [
-                    {k:'horarios', l:'Cumplimiento Horarios'}, 
-                    {k:'uniforme', l:'Uniforme - Aseo'}, 
-                    {k:'atencion', l:'Atención al Usuario'}
-                  ], ['1','2','3','4','5','N/C'], "eval")}
-
-                  {/* NUEVA SECCIÓN: CONDUCCIÓN */}
+                  {/* CONDUCCIÓN */}
                   <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm text-sm">
                     <div className="bg-[#003366] text-white p-2 font-bold uppercase">Conducción</div>
                     <div className="bg-white p-3 sm:p-4 space-y-4">
@@ -402,65 +391,36 @@ export default function InspeccionPage() {
                         { k: 'adelanto', l: 'Maniobra de adelanto', opts: ['1','2','3','4','5','N/C'] }
                       ].map((item) => (
                         <div key={item.k} className="border-b border-gray-200 pb-3 last:border-0 last:pb-0">
-                           {/* Fila del Select */}
                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-2 mb-2">
                              <label className="font-bold text-[#003366] text-xs">{item.l}</label>
-                             <select className="border border-gray-300 p-2 rounded w-full sm:w-1/3 text-xs bg-white font-bold" 
-                               value={formData[`cond_${item.k}`] || ''} 
-                               onChange={(e) => handleChange(`cond_${item.k}`, e.target.value)} required>
+                             <select className="border border-gray-300 p-2 rounded w-full sm:w-1/3 text-xs bg-white font-bold" value={formData[`cond_${item.k}`] || ''} onChange={(e) => handleChange(`cond_${item.k}`, e.target.value)} required>
                                <option value="">--</option>
                                {item.opts.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                              </select>
                            </div>
-                           {/* Fila de Observaciones */}
                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                              <label className="text-[10px] font-bold text-[#003366] uppercase sm:w-28 shrink-0">OBSERVACIONES:</label>
-                             <input type="text" className="w-full border border-gray-300 p-2 rounded text-xs bg-white" 
-                               value={formData[`obs_cond_${item.k}`] || ''} 
-                               onChange={(e) => handleChange(`obs_cond_${item.k}`, e.target.value)} />
+                             <input type="text" className="w-full border border-gray-300 p-2 rounded text-xs bg-white" value={formData[`obs_cond_${item.k}`] || ''} onChange={(e) => handleChange(`obs_cond_${item.k}`, e.target.value)} />
                            </div>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* NUEVA SECCIÓN: NORMAS DE TRÁNSITO */}
-                  {renderRatingTable("NORMAS DE TRÁNSITO", [
-                    {k:'frenadas', l:'Frenadas Bruscas'},
-                    {k:'cinturon', l:'Cinturón de Seguridad'},
-                    {k:'semaforos', l:'Respeta Semáforos'},
-                    {k:'maniobras', l:'Maniobras Agresivas'},
-                    {k:'luces', l:'Uso de luces'},
-                    {k:'bocina', l:'Uso de bocina'},
-                    {k:'paso', l:'Cede el paso'},
-                    {k:'linea', l:'Traspaso línea amarilla'}
-                  ], ['SI', 'NO'], "normas_transito", true)}
+                  {/* NORMAS DE TRÁNSITO */}
+                  {renderRatingTable("NORMAS DE TRÁNSITO", [{k:'frenadas', l:'Frenadas Bruscas'}, {k:'cinturon', l:'Cinturón de Seguridad'}, {k:'semaforos', l:'Respeta Semáforos'}, {k:'maniobras', l:'Maniobras Agresivas'}, {k:'luces', l:'Uso de luces'}, {k:'bocina', l:'Uso de bocina'}, {k:'paso', l:'Cede el paso'}, {k:'linea', l:'Traspaso línea amarilla'}], ['SI', 'NO'], "normas_transito", true)}
 
                   <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm text-sm text-center">
                     <div className="bg-[#003366] text-white p-2 font-bold uppercase">Equipamiento y Sistemas</div>
                     <div className="grid grid-cols-2 bg-gray-50 p-2 gap-2 text-left">
-                      <div className="font-bold self-center text-xs text-[#003366]">Micronauta</div>
-                      <div><select className="w-full border p-1 rounded bg-white" value={formData.micron_existe || ''} onChange={(e)=>handleChange('micron_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
-                      
-                      <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo Micronauta</div>
-                      <div><select className="w-full border p-1 rounded bg-white" value={formData.micron_func || ''} onChange={(e)=>handleChange('micron_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
-                      
-                      <div className="font-bold self-center text-xs text-[#003366]">Cant. Pasajeros Micronauta</div>
-                      <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.micron_pasajeros || ''} onChange={(e)=>handleChange('micron_pasajeros',e.target.value)} /></div>
-                      
+                      <div className="font-bold self-center text-xs text-[#003366]">Micronauta</div><div><select className="w-full border p-1 rounded bg-white" value={formData.micron_existe || ''} onChange={(e)=>handleChange('micron_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
+                      <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo Micronauta</div><div><select className="w-full border p-1 rounded bg-white" value={formData.micron_func || ''} onChange={(e)=>handleChange('micron_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
+                      <div className="font-bold self-center text-xs text-[#003366]">Cant. Pasajeros Micronauta</div><div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.micron_pasajeros || ''} onChange={(e)=>handleChange('micron_pasajeros',e.target.value)} /></div>
                       <div className="col-span-2 border-t my-1 border-gray-200"></div>
-
-                      <div className="font-bold self-center text-xs text-[#003366]">SUBE</div>
-                      <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_existe || ''} onChange={(e)=>handleChange('sube_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
-                      
-                      <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo SUBE</div>
-                      <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_func || ''} onChange={(e)=>handleChange('sube_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
-                      
-                      {/*<div className="font-bold self-center text-xs text-[#003366]">Cant. de Func. Equipo SUBE</div>
-                      <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_cant_func || ''} onChange={(e)=>handleChange('sube_cant_func',e.target.value)} /></div>*/}
-                      
-                      <div className="font-bold self-center text-xs text-[#003366]">Inspecciones SUBE realizadas</div>
-                      <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_inspecciones || ''} onChange={(e)=>handleChange('sube_inspecciones',e.target.value)} /></div>
+                      <div className="font-bold self-center text-xs text-[#003366]">SUBE</div><div><select className="w-full border p-1 rounded bg-white" value={formData.sube_existe || ''} onChange={(e)=>handleChange('sube_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
+                      <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo SUBE</div><div><select className="w-full border p-1 rounded bg-white" value={formData.sube_func || ''} onChange={(e)=>handleChange('sube_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
+                      <div className="font-bold self-center text-xs text-[#003366]">Cant. de Func. Equipo SUBE</div><div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_cant_func || ''} onChange={(e)=>handleChange('sube_cant_func',e.target.value)} /></div>
+                      <div className="font-bold self-center text-xs text-[#003366]">Inspecciones SUBE realizadas</div><div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_inspecciones || ''} onChange={(e)=>handleChange('sube_inspecciones',e.target.value)} /></div>
                     </div>
                   </div>
                 </>
@@ -469,13 +429,15 @@ export default function InspeccionPage() {
               {tipoInspeccion === '2-EMOP' && (
                 <>
                   {renderSearchFields()}
-                  <textarea className="w-full p-3 border rounded mb-6" rows={5} placeholder="Detalles EMOP..." value={formData.emop_detalle || ''} onChange={(e) => handleChange('emop_detalle', e.target.value)} required></textarea>
+                  <h3 className="text-[#003366] font-bold text-lg mb-2 border-l-4 border-yellow-400 pl-2 uppercase">Registro EMOP</h3>
+                  <textarea className="w-full p-3 border rounded mb-6" rows={5} placeholder="Ingrese detalles..." value={formData.emop_detalle || ''} onChange={(e) => handleChange('emop_detalle', e.target.value)} required></textarea>
                 </>
               )}
 
               {(subtipoPersonal === 'Aspirante' || subtipoPersonal === 'Periodo de prueba') && (
                 <>
                   {renderSearchFields(true)}
+                  <h3 className="text-[#003366] font-bold text-lg mb-4 border-l-4 border-yellow-400 pl-2 uppercase">Seguimiento Aspirantes / Prueba</h3>
                   {renderRatingTable("Presentación Personal", [{k:'puntualidad', l:'Puntualidad'}, {k:'uniforme', l:'Uniforme'}, {k:'aseo', l:'Aseo'}, {k:'barba', l:'No usa barba'}, {k:'tatuajes', l:'No tatuajes'}], ['NC','CR','CS','NP'], "pres")}
                   {renderRatingTable("Trato al Usuario", [{k:'modo', l:'Modo'}, {k:'conflicto', l:'Reacción conflicto'}, {k:'incidente', l:'Reacción incidente'}, {k:'info', l:'Información'}], ['NC','CR','CS','NP'], "trato")}
                   {renderRatingTable("Conducción", [{k:'espejos', l:'Espejos'}, {k:'senal', l:'Señalización'}, {k:'vel', l:'Velocidad'}, {k:'dist', l:'Distancia'}, {k:'defensivo', l:'Manejo defensivo'}], ['NC','CR','CS','NP'], "cond")}
@@ -484,6 +446,7 @@ export default function InspeccionPage() {
 
               {tipoInspeccion === '4-SEGUIMIENTO DE TEMAS' && (
                 <>
+                  <h3 className="text-[#003366] font-bold text-lg mb-4 border-l-4 border-yellow-400 pl-2 uppercase">Seguimiento de Temas</h3>
                   <select className="w-full p-2 border rounded mb-4" value={formData.tema_tipo || ''} onChange={(e) => handleChange('tema_tipo', e.target.value)} required>
                     <option value="">-- Seleccione Tipo de Tema --</option>
                     <option value="Quejas y reclamos">Quejas y reclamos</option>
@@ -494,18 +457,33 @@ export default function InspeccionPage() {
                     <option value="Reuniones con entidades">Reuniones con entidades</option>
                     <option value="Otros">Otros</option>
                   </select>
-                  <textarea className="w-full p-3 border rounded mb-6" rows={4} placeholder="Novedades..." value={formData.observacion_temas || ''} onChange={(e) => handleChange('observacion_temas', e.target.value)} required></textarea>
+
+                  {/* NUEVO: BOTÓN INTEGRADOR PARA CARGAR SINIESTROS AL MAPA DE SEGURIDAD VIAL */}
+                  {formData.tema_tipo === 'Siniestros' && (
+                    <div className="mb-4 space-y-2 animate-in fade-in duration-300">
+                      <button 
+                        type="button" 
+                        onClick={() => setShowSiniestroModal(true)} 
+                        className={`w-full text-white font-black p-4 rounded-xl text-sm transition-all shadow-md active:scale-95 ${formData.siniestro_cargado_mapa === 'SÍ' ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'}`}
+                      >
+                        {formData.siniestro_cargado_mapa === 'SÍ' ? '✅ SINIESTRO CARGADO CON ÉXITO' : '🚨 CARGAR A MAPA DE SINESTRALIDAD'}
+                      </button>
+                      <small className="block text-center text-gray-500 italic">Debe registrar el siniestro en la plataforma vial externa antes de guardar.</small>
+                    </div>
+                  )}
+
+                  <textarea className="w-full p-3 border rounded mb-6" rows={4} placeholder="Observaciones / Novedades..." value={formData.observacion_temas || ''} onChange={(e) => handleChange('observacion_temas', e.target.value)} required></textarea>
                 </>
               )}
 
               {tipoInspeccion === '5-INSPECCION AREA DE DESCANSO' && (
                 <>
+                  <h3 className="text-[#003366] font-bold text-lg mb-4 border-l-4 border-yellow-400 pl-2 uppercase">Inspección Area de Descanso</h3>
                   <select className="w-full p-2 border rounded mb-4" value={formData.ubicacion || ''} onChange={(e) => handleChange('ubicacion', e.target.value)} required>
                     <option value="">-- Seleccione Ubicación --</option>
                     <option value="SAN RAFAEL">SAN RAFAEL</option>
                     <option value="GENERAL ALVEAR">GENERAL ALVEAR</option>
                   </select>
-                  {/* AQUÍ LLAMAMOS A LA TABLA DE DESCANSO REAL */}
                   {renderDescansoTable()}
                 </>
               )}
@@ -513,16 +491,32 @@ export default function InspeccionPage() {
               {tipoInspeccion && (
                 <div className="space-y-4 pt-4 border-t mt-6">
                   <textarea className="w-full p-3 border rounded text-sm" rows={2} placeholder="Observaciones Generales" value={formData.observaciones || ''} onChange={(e) => handleChange('observaciones', e.target.value)}></textarea>
-                  <div className="bg-[#f8f9fa] p-3 rounded border">
-                    <label className="text-xs font-bold text-[#003366] block mb-1">📷 Adjuntar Fotos (Opcional)</label>
-                    <input type="file" multiple accept="image/*" className="w-full text-xs" onChange={(e) => setFiles(Array.from(e.target.files ||[]))} />
-                  </div>
+                  <div className="bg-[#f8f9fa] p-3 rounded border"><label className="text-xs font-bold text-[#003366] block mb-1">📷 Adjuntar Fotos (Opcional)</label><input type="file" multiple accept="image/*" className="w-full text-xs" onChange={(e) => setFiles(Array.from(e.target.files ||[]))} /></div>
                   <button type="submit" className="w-full bg-[#002244] text-white p-4 rounded font-bold uppercase" disabled={loading}>{loading ? 'ENVIANDO...' : 'GUARDAR Y ENVIAR'}</button>
                 </div>
               )}
             </form>
           </div>
         </main>
+      )}
+
+      {/* MODAL INTEGRACIÓN MAPA DE SINIESTROS */}
+      {showSiniestroModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-2 z-[80] backdrop-blur-sm">
+          <div className="bg-white w-full max-w-lg rounded-xl shadow-2xl flex flex-col h-[90vh] overflow-hidden">
+            <div className="bg-red-600 text-white p-4 flex justify-between items-center rounded-t-lg shrink-0">
+              <h2 className="font-bold text-sm">Carga Mapa de Siniestralidad</h2>
+              <button onClick={() => setShowSiniestroModal(false)} className="text-2xl leading-none">&times;</button>
+            </div>
+            <div className="flex-1 bg-gray-900">
+              <iframe 
+                src="https://seguridad-vial-buttini.vercel.app/?mode=siniestro" 
+                className="w-full h-full border-none"
+                title="Mapa de Siniestralidad"
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* MODAL SEGUIMIENTO INSPECTOR */}
@@ -533,13 +527,12 @@ export default function InspeccionPage() {
               <h2 className="font-bold text-sm">Seguimiento: {modalSeg.tipo}</h2>
               <button onClick={() => setModalSeg(null)} className="text-2xl leading-none">&times;</button>
             </div>
-            
             <div className="p-4 overflow-y-auto flex-1 bg-gray-50 space-y-4">
               
-              {/* NUEVO: Reconstrucción del reporte con marcas rojas para el inspector */}
+              {/* RECONSTRUCCIÓN DE FICHA EN EL MODAL */}
               <FichaVisualizador ins={modalSeg} />
 
-              {/* NUEVO: Fotos de respaldo si existen */}
+              {/* FOTOS DE RESPALDO */}
               {modalSeg.fotos && modalSeg.fotos.length > 0 && (
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                   <h3 className="font-bold text-[#003366] text-xs uppercase border-b pb-2 mb-3">Fotos de Respaldo</h3>
