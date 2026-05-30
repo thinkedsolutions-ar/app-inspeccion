@@ -490,9 +490,19 @@ export default function InspeccionPage() {
 
               {tipoInspeccion && (
                 <div className="space-y-4 pt-4 border-t mt-6">
-                  <textarea className="w-full p-3 border rounded text-sm" rows={2} placeholder="Observaciones Generales" value={formData.observaciones || ''} onChange={(e) => handleChange('observaciones', e.target.value)}></textarea>
-                  <div className="bg-[#f8f9fa] p-3 rounded border"><label className="text-xs font-bold text-[#003366] block mb-1">📷 Adjuntar Fotos (Opcional)</label><input type="file" multiple accept="image/*" className="w-full text-xs" onChange={(e) => setFiles(Array.from(e.target.files ||[]))} /></div>
-                  <button type="submit" className="w-full bg-[#002244] text-white p-4 rounded font-bold uppercase" disabled={loading}>{loading ? 'ENVIANDO...' : 'GUARDAR Y ENVIAR'}</button>
+                  {/* Ocultamos las Observaciones Generales y la caja de Fotos si es un Siniestro */}
+                  {!String(formData.tema_tipo || '').toLowerCase().includes('siniest') && (
+                    <>
+                      <textarea className="w-full p-3 border rounded text-sm" rows={2} placeholder="Observaciones Generales" value={formData.observaciones || ''} onChange={(e) => handleChange('observaciones', e.target.value)}></textarea>
+                      <div className="bg-[#f8f9fa] p-3 rounded border">
+                        <label className="text-sm font-bold text-[#003366] block mb-2">📷 Adjuntar Fotos (Opcional)</label>
+                        <input type="file" multiple accept="image/*" className="w-full text-sm" onChange={(e) => setFiles(Array.from(e.target.files ||[]))} />
+                      </div>
+                    </>
+                  )}
+                  <button type="submit" className="w-full bg-[#002244] text-white p-4 rounded font-bold uppercase" disabled={loading}>
+                    {loading ? 'ENVIANDO...' : 'GUARDAR Y ENVIAR'}
+                  </button>
                 </div>
               )}
             </form>
