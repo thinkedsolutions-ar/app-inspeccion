@@ -124,24 +124,22 @@ export default function InspeccionPage() {
   const logShift = async (accion: string) => {
     setLoading(true);
     navigator.geolocation.getCurrentPosition(async (pos) => {
-        await supabase.from('inspections').insert([{
-          id: idInspeccion, 
-          inspector: user.nombre,
-          tipo: tipoInspeccion + (subtipoPersonal ? ` - ${subtipoPersonal}` : ''),
-          lat: pos.coords.latitude, 
-          lon: pos.coords.longitude,
-          fotos: fotosUrls, 
-          datos_formulario: { 
-            ...formData, 
-            fecha_formulario: fecha, 
-            hora_formulario: hora,
-            empresa: esTurismo ? 'Turismo Buttini' : 'Antonio Buttini'
-          },
-          obs_general: formData.observaciones || formData.observacion_temas || ''
-        }]);
-        alert("¡Inspección guardada con éxito!"); 
-        window.location.reload();
-      });
+      await supabase.from('shifts').insert([{
+        username: user.username, 
+        nombre: user.nombre, 
+        accion: accion, 
+        lat: pos.coords.latitude, 
+        lon: pos.coords.longitude
+      }]);
+      
+      if (accion === 'FIN') { 
+        localStorage.removeItem('buttini_user'); 
+        window.location.href = '/'; 
+      } else {
+        checkJornada(user.username);
+      }
+      setLoading(false);
+    });
   };
 
   const handleChange = (campo: string, valor: string) => {
