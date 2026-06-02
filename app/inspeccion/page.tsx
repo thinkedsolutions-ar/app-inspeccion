@@ -151,17 +151,13 @@ export default function InspeccionPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // BLOQUEO: Si es un siniestro, obligar a que se haya cargado en el mapa de siniestralidad
-    if (tipoInspeccion === '4-SEGUIMIENTO DE TEMAS' && formData.tema_tipo === 'Siniestros' && formData.siniestro_cargado_mapa !== 'SÍ') {
-      alert("❌ Proceso Incompleto: Debe registrar el siniestro en el mapa (botón rojo) antes de poder guardar el reporte.");
-      return;
-    }
-
+    // Validación Estricta: Si NO es aspirante, el conductor debe existir en la lista
     const esAspirante = tipoInspeccion === '3-SEGUIMIENTO DE PERSONAL' && subtipoPersonal === 'Aspirante';
     if (!esAspirante && formData.conductor) {
       const existe = listas.conductores.find((c:any) => c.fullName === formData.conductor);
-      if (!existe && !tipoInspeccion.includes('TEMAS') && !tipoInspeccion.includes('DESCANSO')) {
-        alert("Atención: Debe seleccionar un conductor válido de la lista."); return;
+      if (!existe && tipoInspeccion !== '4-SEGUIMIENTO DE TEMAS' && tipoInspeccion !== '5-INSPECCION AREA DE DESCANSO') {
+        alert("Atención: Debe seleccionar un conductor válido de la lista.");
+        return;
       }
     }
 
@@ -169,11 +165,18 @@ export default function InspeccionPage() {
     try {
       const idInspeccion = `${new Date().getTime()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
       let fotosUrls: string[] = [];
+      
+      // LÓGICA DE FOTOS CON CAPTURA DE ERRORES
       if (files.length > 0) {
         for (const file of files) {
           const fileName = `${idInspeccion}_${Math.random()}.${file.name.split('.').pop()}`;
           const { error: uploadError } = await supabase.storage.from('fotos-inspecciones').upload(fileName, file);
-          if (uploadError) { alert(`Error al subir la imagen: ${uploadError.message}`); setLoading(false); return; }
+          
+          if (uploadError) {
+            alert(`Error al subir la imagen: ${uploadError.message}`);
+            setLoading(false);
+            return; 
+          }
           const { data: urlData } = supabase.storage.from('fotos-inspecciones').getPublicUrl(fileName);
           fotosUrls.push(urlData.publicUrl);
         }
@@ -181,15 +184,26 @@ export default function InspeccionPage() {
 
       navigator.geolocation.getCurrentPosition(async (pos) => {
         await supabase.from('inspections').insert([{
-          id: idInspeccion, inspector: user.nombre,
+          id: idInspeccion, 
+          inspector: user.nombre,
           tipo: tipoInspeccion + (subtipoPersonal ? ` - ${subtipoPersonal}` : ''),
-          lat: pos.coords.latitude, lon: pos.coords.longitude,
-          fotos: fotosUrls, datos_formulario: { ...formData, fecha_formulario: fecha, hora_formulario: hora, empresa: esTurismo ? 'Turismo Buttini' : 'Antonio Buttini' }, // <-- GUARDAR EMPRESA 
+          lat: pos.coords.latitude, 
+          lon: pos.coords.longitude,
+          fotos: fotosUrls, 
+          datos_formulario: { 
+            ...formData, 
+            fecha_formulario: fecha, 
+            hora_formulario: hora,
+            empresa: esTurismo ? 'Turismo Buttini' : 'Antonio Buttini'
+          },
           obs_general: formData.observaciones || formData.observacion_temas || ''
         }]);
-        alert("¡Inspección guardada con éxito!"); window.location.reload();
+        alert("¡Inspección guardada con éxito!"); 
+        window.location.reload();
       });
-    } catch (err) { alert("Error al guardar."); }
+    } catch (err) { 
+      alert("Error al guardar la inspección."); 
+    }
   };
 
   const renderSearchFields = (includesInstructor = false) => {
