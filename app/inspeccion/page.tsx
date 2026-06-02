@@ -186,7 +186,6 @@ export default function InspeccionPage() {
           lat: pos.coords.latitude, lon: pos.coords.longitude,
           fotos: fotosUrls, datos_formulario: { ...formData, fecha_formulario: fecha, hora_formulario: hora, empresa: esTurismo ? 'Turismo Buttini' : 'Antonio Buttini' }, // <-- GUARDAR EMPRESA 
           obs_general: formData.observaciones || formData.observacion_temas || ''
-          obs_general: formData.observaciones || formData.observacion_temas || ''
         }]);
         alert("¡Inspección guardada con éxito!"); window.location.reload();
       });
