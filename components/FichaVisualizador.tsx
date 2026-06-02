@@ -104,7 +104,8 @@ export default function FichaVisualizador({ ins }: any) {
       {/* Cabecera Básica */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
         <div className="bg-white p-2 rounded border shadow-sm"><label className="text-[9px] font-bold text-gray-500 uppercase block">Inspector</label><span className="text-xs font-black text-[#003366]">{ins.inspector}</span></div>
-        <div className="bg-white p-2 rounded border shadow-sm"><label className="text-[9px] font-bold text-gray-500 uppercase block">Tipo</label><span className="text-xs font-black text-[#003366] truncate block">{t}</span></div>
+        <div className="bg-white p-2 rounded border shadow-sm"><label className="text-[9px] font-bold text-gray-500 uppercase block">Empresa</label><span className="text-xs font-black text-[#003366] truncate block">{f.empresa || 'Antonio Buttini'}</span></div>
+        <div className="bg-white p-2 rounded border shadow-sm col-span-2"><label className="text-[9px] font-bold text-gray-500 uppercase block">Tipo</label><span className="text-xs font-black text-[#003366] truncate block">{t}</span></div>
         {f.conductor && <div className="bg-white p-2 rounded border shadow-sm col-span-2"><label className="text-[9px] font-bold text-gray-500 uppercase block">Conductor</label><span className="text-xs font-black text-[#003366] truncate block">{f.conductor}</span></div>}
         {f.unidad && <div className="bg-white p-2 rounded border shadow-sm"><label className="text-[9px] font-bold text-gray-500 uppercase block">Unidad</label><span className="text-xs font-black text-[#003366]">{f.unidad}</span></div>}
         {f.servicio && <div className="bg-white p-2 rounded border shadow-sm"><label className="text-[9px] font-bold text-gray-500 uppercase block">Servicio</label><span className="text-xs font-black text-[#003366]">{f.servicio}</span></div>}

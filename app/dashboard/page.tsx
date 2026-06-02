@@ -34,6 +34,7 @@ export default function DashboardPage() {
   const [chkObservaciones, setChkObservaciones] = useState(false);
   const [filtroInspector, setFiltroInspector] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroEmpresa, setFiltroEmpresa] = useState('Todas'); // <-- NUEVO ESTADO
 
   const [modalIns, setModalIns] = useState<any>(null);
   const [nuevoComentario, setNewComentario] = useState('');
@@ -98,6 +99,11 @@ export default function DashboardPage() {
   const dataTabla = inspecciones.filter(ins => {
     const dateOk = ins.created_at >= `${fechaInicio}T00:00:00Z` && ins.created_at <= `${fechaFin}T23:59:59Z`;
     if (!dateOk) return false;
+    
+    // Filtro Empresa (Compatibilidad hacia atrás)
+    const empresaIns = ins.datos_formulario?.empresa || 'Antonio Buttini';
+    if (filtroEmpresa !== 'Todas' && empresaIns !== filtroEmpresa) return false;
+
     if (chkSeguimiento && getInspectionStatus(ins.id) === 'SIN SEGUIMIENTO') return false;
     if (chkObservaciones && (!ins.obs_general || ins.obs_general.trim() === '')) return false;
     if (filtroInspector && ins.inspector !== filtroInspector) return false;
@@ -310,6 +316,8 @@ export default function DashboardPage() {
           <div className="flex gap-4 items-center flex-wrap">
             <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200"><span className="text-xs font-bold text-gray-500">🗓️ Desde</span><input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="bg-transparent border-none text-sm font-bold text-[#0B132B] outline-none" /></div>
             <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200"><span className="text-xs font-bold text-gray-500">Hasta</span><input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="bg-transparent border-none text-sm font-bold text-[#0B132B] outline-none" /></div>
+            {/* NUEVO FILTRO DE EMPRESA */}
+            <select value={filtroEmpresa} onChange={(e)=>setFiltroEmpresa(e.target.value)} className="border border-gray-200 p-2 rounded-lg text-sm bg-white font-bold text-[#0B132B]"><option value="Todas">Ambas Empresas</option><option value="Antonio Buttini">Antonio Buttini</option><option value="Turismo Buttini">Turismo Buttini</option></select>
             <select value={filtroInspector} onChange={(e)=>setFiltroInspector(e.target.value)} className="border border-gray-200 p-2 rounded-lg text-sm bg-white font-bold text-[#0B132B]"><option value="">Todos los Inspectores</option>{inspectoresUnicos.map((i:any) => <option key={i} value={i}>{i}</option>)}</select>
             <select value={filtroTipo} onChange={(e)=>setFiltroTipo(e.target.value)} className="border border-gray-200 p-2 rounded-lg text-sm bg-white font-bold text-[#0B132B] max-w-xs"><option value="">Todos los Tipos</option>{tiposUnicos.map((t:any) => <option key={t} value={t}>{t}</option>)}</select>
           </div>

@@ -10,6 +10,7 @@ export default function InspeccionPage() {
   const [loading, setLoading] = useState(false);
   const [locationEnabled, setLocationEnabled] = useState<boolean | null>(null);
   
+  const [esTurismo, setEsTurismo] = useState(false); // <-- NUEVO ESTADO
   const [fecha, setFecha] = useState('');
   const [hora, setHora] = useState('');
   const [tipoInspeccion, setTipoInspeccion] = useState('');
@@ -170,7 +171,8 @@ export default function InspeccionPage() {
           id: idInspeccion, inspector: user.nombre,
           tipo: tipoInspeccion + (subtipoPersonal ? ` - ${subtipoPersonal}` : ''),
           lat: pos.coords.latitude, lon: pos.coords.longitude,
-          fotos: fotosUrls, datos_formulario: { ...formData, fecha_formulario: fecha, hora_formulario: hora },
+          fotos: fotosUrls, datos_formulario: { ...formData, fecha_formulario: fecha, hora_formulario: hora, empresa: esTurismo ? 'Turismo Buttini' : 'Antonio Buttini' }, // <-- GUARDAR EMPRESA 
+          obs_general: formData.observaciones || formData.observacion_temas || ''
           obs_general: formData.observaciones || formData.observacion_temas || ''
         }]);
         alert("¡Inspección guardada con éxito!"); window.location.reload();
@@ -338,18 +340,41 @@ export default function InspeccionPage() {
               <div className="grid grid-cols-2 gap-4 mb-4 bg-gray-50 p-4 rounded border">
                 <div><label className="text-xs font-bold text-[#003366]">📅 Fecha</label><input type="date" className="w-full p-2 border rounded" value={fecha} onChange={(e)=>setFecha(e.target.value)} required /></div>
                 <div><label className="text-xs font-bold text-[#003366]">🕒 Hora</label><input type="time" className="w-full p-2 border rounded" value={hora} onChange={(e)=>setHora(e.target.value)} required /></div>
-                <div className="col-span-2"><label className="text-xs font-bold text-[#003366]">👮 Inspector</label><input type="text" className="w-full p-2 border rounded bg-gray-200 font-bold" value={user.nombre} disabled /></div>
+                
+                {/* CAMPO INSPECTOR + CHECK TURISMO */}
+                <div className="col-span-2 flex justify-between items-center bg-gray-200 p-2 rounded border">
+                  <div>
+                    <label className="text-xs font-bold text-[#003366] flex items-center gap-1">👮 Inspector</label>
+                    <div className="font-bold text-[#003366] text-sm px-1">{user.nombre}</div>
+                  </div>
+                  <label className="flex items-center gap-2 bg-white px-3 py-1.5 border border-gray-300 rounded shadow-sm cursor-pointer text-[#003366] font-bold text-xs select-none">
+                    <input type="checkbox" checked={esTurismo} onChange={(e) => setEsTurismo(e.target.checked)} className="w-4 h-4 accent-[#003366] cursor-pointer" />
+                    Turismo
+                  </label>
+                </div>
               </div>
 
               <div className="bg-[#eef4f9] p-4 rounded border-l-4 border-[#003366] mb-6">
                 <label className="block font-bold text-[#003366] mb-2 uppercase text-sm">📋 TIPO DE INSPECCIÓN</label>
-                <select className="w-full p-2 border-2 border-[#003366] rounded bg-white font-bold" value={tipoInspeccion} onChange={(e) => {setTipoInspeccion(e.target.value); setSubtipoPersonal('');}} required>
+                <select className="w-full p-2 border-2 border-[#003366] rounded bg-white font-bold" value={tipoInspeccion} onChange={(e) => {
+                  const val = e.target.value;
+                  // REDIRECCIÓN DIRECTA PARA SINIESTROS
+                  if (val === '6-SINIESTRO CARGA') {
+                    const url = esTurismo ? 'https://riesgo-vial-turismo-buttini.vercel.app/?mode=siniestro' : 'https://seguridad-vial-buttini.vercel.app/?mode=siniestro';
+                    window.open(url, '_blank');
+                    setTipoInspeccion('');
+                    setSubtipoPersonal('');
+                    return;
+                  }
+                  setTipoInspeccion(val); setSubtipoPersonal('');
+                }} required>
                   <option value="">-- Seleccione una opción --</option>
                   <option value="1-INSPECTOR EN CALLE">1 - INSPECTOR EN CALLE</option>
                   <option value="2-EMOP">2 - EMOP</option>
                   <option value="3-SEGUIMIENTO DE PERSONAL">3 - SEGUIMIENTO DE PERSONAL</option>
                   <option value="4-SEGUIMIENTO DE TEMAS">4 - SEGUIMIENTO DE TEMAS</option>
                   <option value="5-INSPECCION AREA DE DESCANSO">5 - INSPECCION AREA DE DESCANSO</option>
+                  <option value="6-SINIESTRO CARGA" className="font-bold text-red-600 bg-red-50">6 - SINIESTRO CARGA ↗</option>
                 </select>
               </div>
 
@@ -450,7 +475,6 @@ export default function InspeccionPage() {
                   <select className="w-full p-2 border rounded mb-4" value={formData.tema_tipo || ''} onChange={(e) => handleChange('tema_tipo', e.target.value)} required>
                     <option value="">-- Seleccione Tipo de Tema --</option>
                     <option value="Quejas y reclamos">Quejas y reclamos</option>
-                    <option value="Siniestros">Siniestros</option>
                     <option value="Etapas Intermedias">Etapas Intermedias</option>
                     <option value="Largada de servicios en base">Largada de servicios en base</option>
                     <option value="Control de servicios en terminal">Control de servicios en terminal</option>
