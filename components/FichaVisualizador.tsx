@@ -82,7 +82,10 @@ function ReadOnlyConduccion({ data }: any) {
 }
 
 // Cuadro de Equipamiento y SUBE
-function ReadOnlyEquipamiento({ data }: any) {
+const ReadOnlyEquipamiento = ({ data }: any) => {
+  // Si la inspección es de Turismo, este módulo no existe.
+  if (data.empresa === 'Turismo Buttini') return null;
+
   return (
     <div className="mb-4 overflow-hidden border border-[#003366] rounded shadow-sm text-xs text-center">
       <div className="bg-[#003366] text-white p-2 font-bold uppercase">Equipamiento y Sistemas</div>
@@ -90,29 +93,22 @@ function ReadOnlyEquipamiento({ data }: any) {
         <div className="font-bold self-center text-[#003366]">Micronauta</div><div className="bg-white p-1 border rounded font-bold">{data.micron_existe || '-'}</div>
         <div className="font-bold self-center text-[#003366]">Func. Equipo Micronauta</div><div className="bg-white p-1 border rounded font-bold">{data.micron_func || '-'}</div>
         <div className="font-bold self-center text-[#003366]">Cant. Pasajeros Micronauta</div><div className="bg-white p-1 border rounded font-bold">{data.micron_pasajeros || '-'}</div>
-        
         <div className="col-span-2 border-t my-1 border-gray-200"></div>
-        
         <div className="font-bold self-center text-[#003366]">SUBE</div><div className="bg-white p-1 border rounded font-bold">{data.sube_existe || '-'}</div>
         <div className="font-bold self-center text-[#003366]">Func. Equipo SUBE</div><div className="bg-white p-1 border rounded font-bold">{data.sube_func || '-'}</div>
         
-        {/* Mostrar Falla SUBE solo si fue Incorrecto */}
         {data.sube_func === 'Incorrecto' && (
           <>
             <div className="font-bold self-center text-red-600">Tipo Falla SUBE</div>
-            <div className="bg-red-50 p-1 border border-red-200 rounded font-bold text-red-700">{data.sube_tipo_falla || '-'}</div>
+            <div className="bg-red-50 p-1 border border-red-200 rounded font-bold text-red-600">{data.sube_tipo_falla || '-'}</div>
           </>
         )}
         
-        {/* Título dinámico para el campo de cantidad */}
-        <div className={`font-bold self-center ${data.sube_func === 'Incorrecto' ? 'text-red-600' : 'text-[#003366]'}`}>
-          {data.sube_func === 'Incorrecto' ? 'Paxs Transportados sin SUBE' : 'Inspecciones SUBE realizadas'}
-        </div>
-        <div className="bg-white p-1 border rounded font-bold">{data.sube_inspecciones || '-'}</div>
+        <div className="font-bold self-center text-[#003366]">Pasajeros Transportados Sin SUBE</div><div className="bg-white p-1 border rounded font-bold">{data.sube_pasajeros_sin_sube || '-'}</div>
       </div>
     </div>
   );
-}
+};
 
 // Formulario Final (Ensamblador)
 export default function FichaVisualizador({ ins }: any) {
