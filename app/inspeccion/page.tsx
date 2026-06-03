@@ -251,50 +251,32 @@ export default function InspeccionPage() {
   };
 
   const renderRatingTable = (title: string, items: {k:string, l:string}[], options: string[], prefix: string, hasObservations: boolean = false) => (
-    !esTurismo && (
-                    <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm text-sm text-center">
-                      <div className="bg-[#003366] text-white p-2 font-bold uppercase">Equipamiento y Sistemas</div>
-                      <div className="grid grid-cols-2 bg-gray-50 p-2 gap-2 text-left">
-                        
-                        <div className="font-bold self-center text-xs text-[#003366]">Micronauta</div>
-                        <div><select className="w-full border p-1 rounded bg-white" value={formData.micron_existe || ''} onChange={(e)=>handleChange('micron_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
-                        
-                        <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo Micronauta</div>
-                        <div><select className="w-full border p-1 rounded bg-white" value={formData.micron_func || ''} onChange={(e)=>handleChange('micron_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
-                        
-                        <div className="font-bold self-center text-xs text-[#003366]">Cant. Pasajeros Micronauta</div>
-                        <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.micron_pasajeros || ''} onChange={(e)=>handleChange('micron_pasajeros',e.target.value)} /></div>
-                        
-                        <div className="col-span-2 border-t my-1 border-gray-200"></div>
-
-                        <div className="font-bold self-center text-xs text-[#003366]">SUBE</div>
-                        <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_existe || ''} onChange={(e)=>handleChange('sube_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
-                        
-                        <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo SUBE</div>
-                        <div><select className="w-full border p-1 rounded bg-white" value={formData.sube_func || ''} onChange={(e)=>handleChange('sube_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
-                        
-                        {/* CAMPO CONDICIONAL: TIPO FALLA SUBE */}
-                        {formData.sube_func === 'Incorrecto' && (
-                          <>
-                            <div className="font-bold self-center text-xs text-red-600">Tipo Falla SUBE</div>
-                            <div>
-                              <select className="w-full border p-1 rounded bg-red-50 text-red-700 font-bold" value={formData.sube_tipo_falla || ''} onChange={(e)=>handleChange('sube_tipo_falla',e.target.value)}>
-                                <option value="">-- Seleccione Falla --</option>
-                                <option value="CONSOLA NO RESPONDE">CONSOLA NO RESPONDE</option>
-                                <option value="SINCRONIZANDO">SINCRONIZANDO</option>
-                                <option value="NO GRABA QR">NO GRABA QR</option>
-                                <option value="APAGADA">APAGADA</option>
-                                <option value="NO ACREDITA CARGAS">NO ACREDITA CARGAS</option>
-                              </select>
-                            </div>
-                          </>
-                        )}
-                        
-                        <div className="font-bold self-center text-xs text-[#003366]">Inspecciones SUBE realizadas</div>
-                        <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_inspecciones || ''} onChange={(e)=>handleChange('sube_inspecciones',e.target.value)} /></div>
-                      </div>
-                    </div>
-                  )
+    <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm">
+      <table className="w-full text-sm text-center bg-white border-collapse">
+        <thead className="bg-[#003366] text-white">
+          <tr><th colSpan={options.length + 1} className="p-2 font-bold uppercase text-xs">{title}</th></tr>
+          <tr className="bg-[#002244] text-xs"><th className="p-2 text-left w-1/2">ITEM</th>{options.map(o => <th key={o} className="p-2">{o}</th>)}</tr>
+        </thead>
+        <tbody>
+          {items.map((item, idx) => (
+            <tr key={item.k} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+              <td className="p-2 text-left border-t border-r text-xs font-medium">{item.l}</td>
+              {options.map(opt => (
+                <td key={opt} className="p-2 border-t" onClick={() => handleChange(`${prefix}_${item.k}`, opt)}>
+                  <input type="radio" name={`${prefix}_${item.k}`} value={opt} checked={formData[`${prefix}_${item.k}`] === opt} onChange={() => handleChange(`${prefix}_${item.k}`, opt)} className="w-4 h-4 cursor-pointer accent-[#003366]" required />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {hasObservations && (
+        <div className="p-2 border-t border-[#003366] bg-white flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+          <label className="text-[10px] font-bold text-[#003366] uppercase w-24 text-left pl-1">OBSERVACIONES</label>
+          <input type="text" className="flex-1 border border-gray-300 p-2 rounded text-xs bg-white w-full" value={formData[`obs_${prefix}`] || ''} onChange={(e) => handleChange(`obs_${prefix}`, e.target.value)} />
+        </div>
+      )}
+    </div>
   );
 
   const renderDescansoTable = () => {
@@ -500,13 +482,8 @@ export default function InspeccionPage() {
                       <div className="col-span-2 border-t my-1 border-gray-200"></div>
                       <div className="font-bold self-center text-xs text-[#003366]">SUBE</div><div><select className="w-full border p-1 rounded bg-white" value={formData.sube_existe || ''} onChange={(e)=>handleChange('sube_existe',e.target.value)}><option value="">--</option><option>Existe</option><option>No Existe</option></select></div>
                       <div className="font-bold self-center text-xs text-[#003366]">Func. Equipo SUBE</div><div><select className="w-full border p-1 rounded bg-white" value={formData.sube_func || ''} onChange={(e)=>handleChange('sube_func',e.target.value)}><option value="">--</option><option>Correcto</option><option>Incorrecto</option></select></div>
-                      {/* CAMBIO DE TÍTULO DINÁMICO SEGÚN ESTADO DE SUBE */}
-                      <div className={`font-bold self-center text-xs ${formData.sube_func === 'Incorrecto' ? 'text-red-600' : 'text-[#003366]'}`}>
-                        {formData.sube_func === 'Incorrecto' ? 'Paxs Transportados sin SUBE' : 'Inspecciones SUBE realizadas'}
-                      </div>
-                      <div>
-                        <input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_inspecciones || ''} onChange={(e)=>handleChange('sube_inspecciones',e.target.value)} />
-                      </div>
+                      <div className="font-bold self-center text-xs text-[#003366]">Cant. de Func. Equipo SUBE</div><div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_cant_func || ''} onChange={(e)=>handleChange('sube_cant_func',e.target.value)} /></div>
+                      <div className="font-bold self-center text-xs text-[#003366]">Inspecciones SUBE realizadas</div><div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_inspecciones || ''} onChange={(e)=>handleChange('sube_inspecciones',e.target.value)} /></div>
                     </div>
                   </div>
                 </>
