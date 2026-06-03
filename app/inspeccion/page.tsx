@@ -167,38 +167,48 @@ export default function InspeccionPage() {
     }
 
     setLoading(true);
-    // ... el resto de la función sigue igual hacia abajo ...
+    try {
+      const idInspeccion = `${new Date().getTime()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+      let fotosUrls: string[] = [];
+      
+      // LÓGICA DE FOTOS CON CAPTURA DE ERRORES
+      if (files.length > 0) {
+        for (const file of files) {
+          const fileName = `${idInspeccion}_${Math.random()}.${file.name.split('.').pop()}`;
+          const { error: uploadError } = await supabase.storage.from('fotos-inspecciones').upload(fileName, file);
+          
+          if (uploadError) {
+            alert(`Error al subir la imagen: ${uploadError.message}`);
+            setLoading(false);
+            return; 
+          }
+          const { data: urlData } = supabase.storage.from('fotos-inspecciones').getPublicUrl(fileName);
+          fotosUrls.push(urlData.publicUrl);
+        }
+      }
 
-  const renderSearchFields = (includesInstructor = false) => {
-    const esAspirante = tipoInspeccion === '3-SEGUIMIENTO DE PERSONAL' && subtipoPersonal === 'Aspirante';
-    return (
-      <div className="space-y-4 mb-6 border-b pb-6">
-        <datalist id="list-conductores">{listas.conductores.map((c:any) => <option key={c.id} value={c.fullName} />)}</datalist>
-        <datalist id="list-unidades">{listas.unidades.map((u:any) => <option key={u.numero} value={u.numero} />)}</datalist>
-        <datalist id="list-servicios">{listas.servicios.map((s:any) => <option key={s.nombre} value={s.nombre} />)}</datalist>
-
-        <div>
-          <label className="text-xs font-bold text-[#003366]">🔍 Conductor {esAspirante ? '(Carga Manual)' : ''}</label>
-          <input type="text" list={esAspirante ? undefined : "list-conductores"} placeholder="Buscar conductor..." className="w-full p-2 border rounded bg-white text-sm" value={formData.conductor || ''} onChange={(e) => handleChange('conductor', e.target.value)} required />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-bold text-[#003366]">🚌 Unidad N°</label>
-            <input type="text" list="list-unidades" placeholder="Buscar..." className="w-full p-2 border rounded bg-white text-sm" value={formData.unidad || ''} onChange={(e) => handleChange('unidad', e.target.value)} required />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-[#003366]">Servicio</label>
-            <input type="text" list="list-servicios" placeholder="Buscar..." className="w-full p-2 border rounded bg-white text-sm" value={formData.servicio || ''} onChange={(e) => handleChange('servicio', e.target.value)} required />
-          </div>
-        </div>
-        {includesInstructor && (
-          <div className="pt-4 border-t">
-            <label className="text-xs font-bold text-[#003366]">👨‍🏫 Instructor / Tutor</label>
-            <input type="text" list="list-conductores" placeholder="Buscar tutor..." className="w-full p-2 border rounded bg-white text-sm" value={formData.instructor || ''} onChange={(e) => handleChange('instructor', e.target.value)} required />
-          </div>
-        )}
-      </div>
-    );
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        await supabase.from('inspections').insert([{
+          id: idInspeccion, 
+          inspector: user.nombre,
+          tipo: tipoInspeccion + (subtipoPersonal ? ` - ${subtipoPersonal}` : ''),
+          lat: pos.coords.latitude, 
+          lon: pos.coords.longitude,
+          fotos: fotosUrls, 
+          datos_formulario: { 
+            ...formData, 
+            fecha_formulario: fecha, 
+            hora_formulario: hora,
+            empresa: esTurismo ? 'Turismo Buttini' : 'Antonio Buttini'
+          },
+          obs_general: formData.observaciones || formData.observacion_temas || ''
+        }]);
+        alert("¡Inspección guardada con éxito!"); 
+        window.location.reload();
+      });
+    } catch (err) { 
+      alert("Error al guardar la inspección."); 
+    }
   };
 
   const renderSearchFields = (includesInstructor = false) => {
@@ -239,6 +249,35 @@ export default function InspeccionPage() {
       </div>
     );
   };
+
+  const renderRatingTable = (title: string, items: {k:string, l:string}[], options: string[], prefix: string, hasObservations: boolean = false) => (
+    <div className="mb-6 overflow-hidden border border-[#003366] rounded shadow-sm">
+      <table className="w-full text-sm text-center bg-white border-collapse">
+        <thead className="bg-[#003366] text-white">
+          <tr><th colSpan={options.length + 1} className="p-2 font-bold uppercase text-xs">{title}</th></tr>
+          <tr className="bg-[#002244] text-xs"><th className="p-2 text-left w-1/2">ITEM</th>{options.map(o => <th key={o} className="p-2">{o}</th>)}</tr>
+        </thead>
+        <tbody>
+          {items.map((item, idx) => (
+            <tr key={item.k} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+              <td className="p-2 text-left border-t border-r text-xs font-medium">{item.l}</td>
+              {options.map(opt => (
+                <td key={opt} className="p-2 border-t" onClick={() => handleChange(`${prefix}_${item.k}`, opt)}>
+                  <input type="radio" name={`${prefix}_${item.k}`} value={opt} checked={formData[`${prefix}_${item.k}`] === opt} onChange={() => handleChange(`${prefix}_${item.k}`, opt)} className="w-4 h-4 cursor-pointer accent-[#003366]" required />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {hasObservations && (
+        <div className="p-2 border-t border-[#003366] bg-white flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+          <label className="text-[10px] font-bold text-[#003366] uppercase w-24 text-left pl-1">OBSERVACIONES</label>
+          <input type="text" className="flex-1 border border-gray-300 p-2 rounded text-xs bg-white w-full" value={formData[`obs_${prefix}`] || ''} onChange={(e) => handleChange(`obs_${prefix}`, e.target.value)} />
+        </div>
+      )}
+    </div>
+  );
 
   const renderDescansoTable = () => {
     const items = [
