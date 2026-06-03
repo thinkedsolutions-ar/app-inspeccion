@@ -1,6 +1,6 @@
 import React from 'react';
 
-// Motor que detecta si una respuesta es una "Falta" según tus reglas
+// Motor que detecta si una respuesta es una "Falta" para pintarla de rojo
 const isFalta = (key: string, val: string) => {
   if(!val) return false;
   const v = String(val).toUpperCase();
@@ -81,6 +81,7 @@ function ReadOnlyConduccion({ data }: any) {
    );
 }
 
+// Cuadro de Equipamiento y SUBE
 function ReadOnlyEquipamiento({ data }: any) {
   return (
     <div className="mb-4 overflow-hidden border border-[#003366] rounded shadow-sm text-xs text-center">
@@ -89,7 +90,9 @@ function ReadOnlyEquipamiento({ data }: any) {
         <div className="font-bold self-center text-[#003366]">Micronauta</div><div className="bg-white p-1 border rounded font-bold">{data.micron_existe || '-'}</div>
         <div className="font-bold self-center text-[#003366]">Func. Equipo Micronauta</div><div className="bg-white p-1 border rounded font-bold">{data.micron_func || '-'}</div>
         <div className="font-bold self-center text-[#003366]">Cant. Pasajeros Micronauta</div><div className="bg-white p-1 border rounded font-bold">{data.micron_pasajeros || '-'}</div>
+        
         <div className="col-span-2 border-t my-1 border-gray-200"></div>
+        
         <div className="font-bold self-center text-[#003366]">SUBE</div><div className="bg-white p-1 border rounded font-bold">{data.sube_existe || '-'}</div>
         <div className="font-bold self-center text-[#003366]">Func. Equipo SUBE</div><div className="bg-white p-1 border rounded font-bold">{data.sube_func || '-'}</div>
         
@@ -114,7 +117,8 @@ function ReadOnlyEquipamiento({ data }: any) {
 // Formulario Final (Ensamblador)
 export default function FichaVisualizador({ ins }: any) {
   if (!ins) return null;
-  const f = ins.datos_formulario || {}; const t = ins.tipo || '';
+  const f = ins.datos_formulario || {}; 
+  const t = ins.tipo || '';
 
   return (
     <div className="space-y-4">
@@ -135,7 +139,9 @@ export default function FichaVisualizador({ ins }: any) {
           <ReadOnlyRatingTable title="Evaluación del Conductor" prefix="eval" options={['1','2','3','4','5','N/C']} items={[{k:'horarios', l:'Cumplimiento Horarios'}, {k:'uniforme', l:'Uniforme'}, {k:'atencion', l:'Atención al Usuario'}]} data={f} />
           <ReadOnlyConduccion data={f} />
           <ReadOnlyRatingTable title="Normas de Tránsito" prefix="normas_transito" options={['SI','NO']} items={[{k:'frenadas', l:'Frenadas Bruscas'}, {k:'cinturon', l:'Cinturón de Seguridad'}, {k:'semaforos', l:'Respeta Semáforos'}, {k:'maniobras', l:'Maniobras Agresivas'}, {k:'luces', l:'Uso de luces'}, {k:'bocina', l:'Uso de bocina'}, {k:'paso', l:'Cede el paso'}, {k:'linea', l:'Traspaso línea amarilla'}]} data={f} />
-          <ReadOnlyEquipamiento data={f} />
+          
+          {/* Muestra el Equipamiento SOLO si la empresa no es Turismo */}
+          {f.empresa !== 'Turismo Buttini' && <ReadOnlyEquipamiento data={f} />}
         </>
       )}
 
