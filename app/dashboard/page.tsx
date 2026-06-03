@@ -51,9 +51,9 @@ export default function DashboardPage() {
   // Estados ABM y Flota (MODIFICADOS PARA EDICIÓN)
   const [abmTab, setAbmTab] = useState('conductores');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formCond, setFormCond] = useState({ legajo: '', nombres: '', apellido: '', telefono: '' });
-  const [formUni, setFormUni] = useState({ numero: '' });
-  const [formServ, setFormServ] = useState({ nombre: '', temporada: '' });
+  const [formCond, setFormCond] = useState({ legajo: '', nombres: '', apellido: '', telefono: '', empresa: 'Antonio Buttini' });
+  const [formUni, setFormUni] = useState({ numero: '', empresa: 'Antonio Buttini' });
+  const [formServ, setFormServ] = useState({ nombre: '', temporada: '', empresa: 'Antonio Buttini' });
   const [modalDriver, setModalDriver] = useState<any>(null);
 
   useEffect(() => {
@@ -156,30 +156,30 @@ export default function DashboardPage() {
 
   const editItem = (item: any, type: string) => {
     setEditingId(item.id);
-    if (type === 'conductores') setFormCond({ legajo: item.legajo || '', nombres: item.nombres || '', apellido: item.apellido || '', telefono: item.telefono || '' });
-    if (type === 'unidades') setFormUni({ numero: item.numero || '' });
-    if (type === 'servicios') setFormServ({ nombre: item.nombre || '', temporada: item.temporada || '' });
+    if (type === 'conductores') setFormCond({ legajo: item.legajo || '', nombres: item.nombres || '', apellido: item.apellido || '', telefono: item.telefono || '', empresa: item.empresa || 'Antonio Buttini' });
+    if (type === 'unidades') setFormUni({ numero: item.numero || '', empresa: item.empresa || 'Antonio Buttini' });
+    if (type === 'servicios') setFormServ({ nombre: item.nombre || '', temporada: item.temporada || '', empresa: item.empresa || 'Antonio Buttini' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const downloadCSVTemplate = (type: string) => {
-      let csv = '';
-      if(type === 'conductores') csv = 'legajo,nombres,apellido,telefono\n101,Juan,Perez,2604123456';
-      if(type === 'unidades') csv = 'numero\n145\n146';
-      if(type === 'servicios') csv = 'nombre\n540 - Ciudad\n570 - Directo';
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `plantilla_${type}.csv`; a.click();
+    let csv = '';
+    if(type === 'conductores') csv = 'legajo,nombres,apellido,telefono,empresa\n101,Juan,Perez,2604123456,Antonio Buttini';
+    if(type === 'unidades') csv = 'numero,empresa\n145,Antonio Buttini';
+    if(type === 'servicios') csv = 'nombre,empresa\n540 - Ciudad,Antonio Buttini';
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `plantilla_${type}.csv`; a.click();
   };
-  
+
   const handleCSVUpload = (e: any, type: string) => {
     const file = e.target.files[0]; if(!file) return;
     Papa.parse(file, { header: true, complete: async (res) => {
       const data = res.data as any[];
       let payload: any[] = [];
-      if(type === 'conductores') payload = data.filter(r=>r.legajo).map(r => ({ legajo: r.legajo, apellido: r.apellido, telefono: r.telefono, nombre: r.nombre, activo: true }));
-      if(type === 'unidades') payload = data.filter(r=>r.numero).map(r => ({ numero: r.numero, activo: true }));
-      if(type === 'servicios') payload = data.filter(r=>r.nombre).map(r => ({ nombre: r.nombre, activo: true }));
+      if(type === 'conductores') payload = data.filter(r=>r.legajo).map(r => ({ legajo: r.legajo, apellido: r.apellido, telefono: r.telefono, nombres: r.nombres, nombre: `${r.legajo} - ${r.apellido}, ${r.nombres}`, empresa: r.empresa || 'Antonio Buttini', activo: true }));
+      if(type === 'unidades') payload = data.filter(r=>r.numero).map(r => ({ numero: r.numero, empresa: r.empresa || 'Antonio Buttini', activo: true }));
+      if(type === 'servicios') payload = data.filter(r=>r.nombre).map(r => ({ nombre: r.nombre, empresa: r.empresa || 'Antonio Buttini', activo: true }));
       
       const col = type === 'conductores' ? 'nombre' : (type === 'unidades' ? 'numero' : 'nombre');
       await supabase.from(type).upsert(payload, { onConflict: col });
@@ -191,29 +191,22 @@ export default function DashboardPage() {
     e.preventDefault();
     if(type === 'conductores') {
       const fullName = `${formCond.legajo} - ${formCond.apellido}, ${formCond.nombres}`;
-      const payloadCond = { 
-        legajo: formCond.legajo, 
-        nombres: formCond.nombres, 
-        apellido: formCond.apellido, 
-        telefono: formCond.telefono, 
-        nombre: fullName 
-      };
-      
+      const payloadCond = { legajo: formCond.legajo, nombres: formCond.nombres, apellido: formCond.apellido, telefono: formCond.telefono, nombre: fullName, empresa: formCond.empresa };
       if (editingId) await supabase.from('conductores').update(payloadCond).eq('id', editingId);
       else await supabase.from('conductores').insert([{ ...payloadCond, activo: true }]);
     }
     if(type === 'unidades') {
-      if (editingId) await supabase.from('unidades').update({ numero: formUni.numero }).eq('id', editingId);
-      else await supabase.from('unidades').insert([{ numero: formUni.numero, activo: true }]);
+      if (editingId) await supabase.from('unidades').update({ numero: formUni.numero, empresa: formUni.empresa }).eq('id', editingId);
+      else await supabase.from('unidades').insert([{ numero: formUni.numero, empresa: formUni.empresa, activo: true }]);
     }
     if(type === 'servicios') {
-      if (editingId) await supabase.from('servicios').update({ nombre: formServ.nombre, temporada: formServ.temporada }).eq('id', editingId);
-      else await supabase.from('servicios').insert([{ nombre: formServ.nombre, temporada: formServ.temporada, activo: true }]);
+      if (editingId) await supabase.from('servicios').update({ nombre: formServ.nombre, temporada: formServ.temporada, empresa: formServ.empresa }).eq('id', editingId);
+      else await supabase.from('servicios').insert([{ nombre: formServ.nombre, temporada: formServ.temporada, empresa: formServ.empresa, activo: true }]);
     }
     setEditingId(null); 
-    setFormCond({ legajo: '', nombres: '', apellido: '', telefono: '' }); 
-    setFormUni({ numero: '' }); 
-    setFormServ({ nombre: '', temporada: '' });
+    setFormCond({ legajo: '', nombres: '', apellido: '', telefono: '', empresa: 'Antonio Buttini' }); 
+    setFormUni({ numero: '', empresa: 'Antonio Buttini' }); 
+    setFormServ({ nombre: '', temporada: '', empresa: 'Antonio Buttini' });
     alert(editingId ? "Actualizado correctamente" : "Guardado correctamente"); 
     fetchCatalogosAdmin();
   };
@@ -491,6 +484,20 @@ export default function DashboardPage() {
                       {abmTab === 'servicios' && (
                         <><div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombre Servicio</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formServ.nombre} onChange={e=>setFormServ({...formServ, nombre: e.target.value})} required/></div><div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Temporada (Opcional)</label><input type="text" placeholder="Ej: Verano" className="w-full border p-2 rounded-xl bg-white text-sm" value={formServ.temporada} onChange={e=>setFormServ({...formServ, temporada: e.target.value})} /></div></>
                       )}
+                      <div className="flex-1 min-w-[150px]">
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Empresa</label>
+                        <select className="w-full border p-2 rounded-xl bg-white text-sm" 
+                          value={abmTab === 'conductores' ? formCond.empresa : (abmTab === 'unidades' ? formUni.empresa : formServ.empresa)} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if(abmTab === 'conductores') setFormCond({...formCond, empresa: val});
+                            if(abmTab === 'unidades') setFormUni({...formUni, empresa: val});
+                            if(abmTab === 'servicios') setFormServ({...formServ, empresa: val});
+                          }}>
+                          <option value="Antonio Buttini">Antonio Buttini</option>
+                          <option value="Turismo Buttini">Turismo Buttini</option>
+                        </select>
+                      </div>
                       <button type="submit" className={`text-white font-bold px-6 py-2 rounded-xl text-sm h-[38px] transition-colors ${editingId ? 'bg-[#FFCC00] text-[#0B132B]' : 'bg-[#0B132B] hover:bg-blue-900'}`}>{editingId ? 'Actualizar' : 'Guardar'}</button>
                     </form>
                   </div>
