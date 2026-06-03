@@ -480,11 +480,12 @@ export default function DashboardPage() {
                       {abmTab === 'conductores' && (
                         <><div className="flex-1 min-w-[100px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Legajo</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formCond.legajo} onChange={e=>setFormCond({...formCond, legajo: e.target.value})} required/></div><div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombres</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formCond.nombres} onChange={e=>setFormCond({...formCond, nombres: e.target.value})} required/></div><div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Apellidos</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formCond.apellido} onChange={e=>setFormCond({...formCond, apellido: e.target.value})} required/></div><div className="flex-1 min-w-[120px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Teléfono</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formCond.telefono} onChange={e=>setFormCond({...formCond, telefono: e.target.value})} /></div></>
                       )}
-                      {abmTab === 'unidades' && <div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Número de Unidad</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formUni.numero} onChange={e=>setFormUni({numero: e.target.value})} required/></div>}
+                      {abmTab === 'unidades' && <div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Número de Unidad</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formUni.numero} onChange={e=>setFormUni({...formUni, numero: e.target.value})} required/></div>}
                       {abmTab === 'servicios' && (
                         <><div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombre Servicio</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formServ.nombre} onChange={e=>setFormServ({...formServ, nombre: e.target.value})} required/></div><div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Temporada (Opcional)</label><input type="text" placeholder="Ej: Verano" className="w-full border p-2 rounded-xl bg-white text-sm" value={formServ.temporada} onChange={e=>setFormServ({...formServ, temporada: e.target.value})} /></div></>
                       )}
-                                            <div className="flex-1 min-w-[150px]">
+                      
+                      <div className="flex-1 min-w-[150px]">
                         <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Empresa</label>
                         <select className="w-full border p-2 rounded-xl bg-white text-sm" 
                           value={abmTab === 'conductores' ? formCond.empresa : (abmTab === 'unidades' ? formUni.empresa : formServ.empresa)} 
@@ -498,6 +499,7 @@ export default function DashboardPage() {
                           <option value="Turismo Buttini">Turismo Buttini</option>
                         </select>
                       </div>
+
                       <button type="submit" className={`text-white font-bold px-6 py-2 rounded-xl text-sm h-[38px] transition-colors ${editingId ? 'bg-[#FFCC00] text-[#0B132B]' : 'bg-[#0B132B] hover:bg-blue-900'}`}>{editingId ? 'Actualizar' : 'Guardar'}</button>
                     </form>
                   </div>
