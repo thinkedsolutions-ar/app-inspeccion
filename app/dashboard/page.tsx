@@ -474,7 +474,7 @@ export default function DashboardPage() {
                   <div className={`p-6 rounded-2xl shadow-sm border ${editingId ? 'bg-yellow-50 border-yellow-400' : 'bg-white border-gray-100'}`}>
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="font-bold text-[#0B132B]">{editingId ? `✏️ Editando Registro` : `➕ Alta Manual Individual`}</h3>
-                      {editingId && <button onClick={() => {setEditingId(null); setFormCond({ legajo: '', nombres: '', apellido: '', telefono: '' }); setFormUni({ numero: '' }); setFormServ({ nombre: '', temporada: '' });}} className="text-xs text-red-500 font-bold underline">Cancelar Edición</button>}
+                      {editingId && <button onClick={() => {setEditingId(null); setFormCond({ legajo: '', nombres: '', apellido: '', telefono: '', empresa: 'Antonio Buttini' }); setFormUni({ numero: '', empresa: 'Antonio Buttini' }); setFormServ({ nombre: '', temporada: '', empresa: 'Antonio Buttini' });}} className="text-xs text-red-500 font-bold underline">Cancelar Edición</button>}
                     </div>
                     <form onSubmit={(e) => handleSaveABM(e, abmTab)} className="flex gap-4 items-end flex-wrap">
                       {abmTab === 'conductores' && (
@@ -484,7 +484,7 @@ export default function DashboardPage() {
                       {abmTab === 'servicios' && (
                         <><div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombre Servicio</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formServ.nombre} onChange={e=>setFormServ({...formServ, nombre: e.target.value})} required/></div><div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Temporada (Opcional)</label><input type="text" placeholder="Ej: Verano" className="w-full border p-2 rounded-xl bg-white text-sm" value={formServ.temporada} onChange={e=>setFormServ({...formServ, temporada: e.target.value})} /></div></>
                       )}
-                      <div className="flex-1 min-w-[150px]">
+                                            <div className="flex-1 min-w-[150px]">
                         <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Empresa</label>
                         <select className="w-full border p-2 rounded-xl bg-white text-sm" 
                           value={abmTab === 'conductores' ? formCond.empresa : (abmTab === 'unidades' ? formUni.empresa : formServ.empresa)} 
