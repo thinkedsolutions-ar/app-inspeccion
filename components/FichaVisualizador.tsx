@@ -51,6 +51,36 @@ const ReadOnlyRatingTable = ({ title, items, options, prefix, data }: any) => (
 );
 
 // Cuadro específico de Conducción
+function ReadOnlyConduccion({ data }: any) {
+   const items = [
+      { k: 'ascenso_descenso', l: 'Ascenso / Descenso de pasajeros' }, 
+      { k: 'exceso_velocidad', l: 'Excesos de velocidad' },
+      { k: 'marcha', l: 'Inicio y fin de marcha (Cambios)' }, 
+      { k: 'adelanto', l: 'Maniobra de adelanto' }
+   ];
+   return (
+     <div className="mb-4 overflow-hidden border border-[#003366] rounded shadow-sm text-sm">
+        <div className="bg-[#003366] text-white p-2 font-bold uppercase text-xs text-center">Conducción</div>
+        <div className="bg-white p-3 space-y-3">
+          {items.map(item => {
+            const val = data[`cond_${item.k}`]; 
+            const obs = data[`obs_cond_${item.k}`]; 
+            const isRed = isFalta(`cond_${item.k}`, val);
+            return (
+              <div key={item.k} className="border-b border-gray-200 pb-2 last:border-0 last:pb-0">
+                 <div className="flex justify-between items-center mb-1">
+                   <span className="font-bold text-[#003366] text-xs">{item.l}</span>
+                   <span className={`font-black px-3 py-1 rounded text-xs border ${isRed ? 'bg-red-50 text-red-600 border-red-200' : 'bg-gray-100 text-[#003366] border-gray-200'}`}>{val || '-'}</span>
+                 </div>
+                 {obs && <div className="text-[10px] text-[#003366] bg-yellow-50 p-1.5 rounded border border-yellow-200 mt-1"><strong>OBS:</strong> {obs}</div>}
+              </div>
+            )
+          })}
+        </div>
+     </div>
+   );
+}
+
 function ReadOnlyEquipamiento({ data }: any) {
   return (
     <div className="mb-4 overflow-hidden border border-[#003366] rounded shadow-sm text-xs text-center">
