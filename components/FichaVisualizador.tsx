@@ -51,48 +51,35 @@ const ReadOnlyRatingTable = ({ title, items, options, prefix, data }: any) => (
 );
 
 // Cuadro específico de Conducción
-const ReadOnlyConduccion = ({ data }: any) => {
-   const items = [
-      { k: 'ascenso_descenso', l: 'Ascenso / Descenso de pasajeros' }, { k: 'exceso_velocidad', l: 'Excesos de velocidad' },
-      { k: 'marcha', l: 'Inicio y fin de marcha (Cambios)' }, { k: 'adelanto', l: 'Maniobra de adelanto' }
-   ];
-   return (
-     <div className="mb-4 overflow-hidden border border-[#003366] rounded shadow-sm text-sm">
-        <div className="bg-[#003366] text-white p-2 font-bold uppercase text-xs text-center">Conducción</div>
-        <div className="bg-white p-3 space-y-3">
-          {items.map(item => {
-            const val = data[`cond_${item.k}`]; const obs = data[`obs_cond_${item.k}`]; const isRed = isFalta(`cond_${item.k}`, val);
-            return (
-              <div key={item.k} className="border-b border-gray-200 pb-2 last:border-0 last:pb-0">
-                 <div className="flex justify-between items-center mb-1">
-                   <span className="font-bold text-[#003366] text-xs">{item.l}</span>
-                   <span className={`font-black px-3 py-1 rounded text-xs border ${isRed ? 'bg-red-50 text-red-600 border-red-200' : 'bg-gray-100 text-[#003366] border-gray-200'}`}>{val || '-'}</span>
-                 </div>
-                 {obs && <div className="text-[10px] text-[#003366] bg-yellow-50 p-1.5 rounded border border-yellow-200 mt-1"><strong>OBS:</strong> {obs}</div>}
-              </div>
-            )
-          })}
+function ReadOnlyEquipamiento({ data }: any) {
+  return (
+    <div className="mb-4 overflow-hidden border border-[#003366] rounded shadow-sm text-xs text-center">
+      <div className="bg-[#003366] text-white p-2 font-bold uppercase">Equipamiento y Sistemas</div>
+      <div className="grid grid-cols-2 bg-gray-50 p-2 gap-2 text-left">
+        <div className="font-bold self-center text-[#003366]">Micronauta</div><div className="bg-white p-1 border rounded font-bold">{data.micron_existe || '-'}</div>
+        <div className="font-bold self-center text-[#003366]">Func. Equipo Micronauta</div><div className="bg-white p-1 border rounded font-bold">{data.micron_func || '-'}</div>
+        <div className="font-bold self-center text-[#003366]">Cant. Pasajeros Micronauta</div><div className="bg-white p-1 border rounded font-bold">{data.micron_pasajeros || '-'}</div>
+        <div className="col-span-2 border-t my-1 border-gray-200"></div>
+        <div className="font-bold self-center text-[#003366]">SUBE</div><div className="bg-white p-1 border rounded font-bold">{data.sube_existe || '-'}</div>
+        <div className="font-bold self-center text-[#003366]">Func. Equipo SUBE</div><div className="bg-white p-1 border rounded font-bold">{data.sube_func || '-'}</div>
+        
+        {/* Mostrar Falla SUBE solo si fue Incorrecto */}
+        {data.sube_func === 'Incorrecto' && (
+          <>
+            <div className="font-bold self-center text-red-600">Tipo Falla SUBE</div>
+            <div className="bg-red-50 p-1 border border-red-200 rounded font-bold text-red-700">{data.sube_tipo_falla || '-'}</div>
+          </>
+        )}
+        
+        {/* Título dinámico para el campo de cantidad */}
+        <div className={`font-bold self-center ${data.sube_func === 'Incorrecto' ? 'text-red-600' : 'text-[#003366]'}`}>
+          {data.sube_func === 'Incorrecto' ? 'Paxs Transportados sin SUBE' : 'Inspecciones SUBE realizadas'}
         </div>
-     </div>
-   );
-};
-
-// Cuadro de Equipamiento y SUBE
-const ReadOnlyEquipamiento = ({ data }: any) => (
-  <div className="mb-4 overflow-hidden border border-[#003366] rounded shadow-sm text-xs text-center">
-    <div className="bg-[#003366] text-white p-2 font-bold uppercase">Equipamiento y Sistemas</div>
-    <div className="grid grid-cols-2 bg-gray-50 p-2 gap-2 text-left">
-      <div className="font-bold self-center text-[#003366]">Micronauta</div><div className="bg-white p-1 border rounded font-bold">{data.micron_existe || '-'}</div>
-      <div className="font-bold self-center text-[#003366]">Func. Equipo Micronauta</div><div className="bg-white p-1 border rounded font-bold">{data.micron_func || '-'}</div>
-      <div className="font-bold self-center text-[#003366]">Cant. Pasajeros Micronauta</div><div className="bg-white p-1 border rounded font-bold">{data.micron_pasajeros || '-'}</div>
-      <div className="col-span-2 border-t my-1 border-gray-200"></div>
-      <div className="font-bold self-center text-[#003366]">SUBE</div><div className="bg-white p-1 border rounded font-bold">{data.sube_existe || '-'}</div>
-      <div className="font-bold self-center text-[#003366]">Func. Equipo SUBE</div><div className="bg-white p-1 border rounded font-bold">{data.sube_func || '-'}</div>
-      <div className="font-bold self-center text-[#003366]">Cant. de Func. Equipo SUBE</div><div className="bg-white p-1 border rounded font-bold">{data.sube_cant_func || '-'}</div>
-      <div className="font-bold self-center text-[#003366]">Inspecciones SUBE realizadas</div><div className="bg-white p-1 border rounded font-bold">{data.sube_inspecciones || '-'}</div>
+        <div className="bg-white p-1 border rounded font-bold">{data.sube_inspecciones || '-'}</div>
+      </div>
     </div>
-  </div>
-);
+  );
+}
 
 // Formulario Final (Ensamblador)
 export default function FichaVisualizador({ ins }: any) {
