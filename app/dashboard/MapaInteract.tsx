@@ -74,13 +74,16 @@ export default function MapComponent({ inspecciones, onVerFicha }: any) {
               icon={blueIcon}
             >
               <Popup>
-<div className="text-center p-1 min-w-[140px]">
+              <div className="text-center p-1 min-w-[140px]">
                 {ins.isShift ? (
                   <>
                     <strong className="block text-[#003366] text-[10px] font-black uppercase mb-1 tracking-wider border-b pb-1">
                       {ins.tipo.replace('📍 ', '')}
                     </strong>
                     <span className="text-xl font-black text-blue-600 block my-2">
+                      <span className="text-[10px] text-gray-500 font-bold block mb-1 leading-none">
+                        {new Date(ins.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </span>
                       {new Date(ins.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </>
@@ -94,7 +97,7 @@ export default function MapComponent({ inspecciones, onVerFicha }: any) {
                   </>
                 )}
               </div>
-              </Popup>
+            </Popup>
             </Marker>
           ) : null
         ))}
