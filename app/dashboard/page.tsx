@@ -274,16 +274,26 @@ export default function DashboardPage() {
 
   const mapDataToShow = (mapaVista === 'inspecciones' ? (desempenoDatos?.mapaIns || []) : (desempenoDatos?.mapaShifts || [])).filter((item: any) => selectedDateFilter ? item.created_at.substring(0,10) === selectedDateFilter : true);
 
-  // --- LÓGICA REPORTES OPERATIVOS (NUEVO TAB) ---
-  const [grupoSel540, setGrupoSel540] = useState('');
-  const [grupoSel570, setGrupoSel570] = useState('');
-
-  // Separar inspecciones por grupo (Analizando el string del servicio)
+// --- LÓGICA REPORTES OPERATIVOS (NUEVO TAB) ---
+  
+  // Separar inspecciones por grupo (Buscando en catálogo o por patrón 54x / 57x)
   const dataGrupos = flotaInspecciones.map(ins => {
     const serv = ins.datos_formulario?.servicio || '';
     let grupo = 'Otro';
-    if (serv.includes('540')) grupo = '540';
-    else if (serv.includes('570')) grupo = '570';
+    
+    // 1. Buscamos si el servicio exacto existe en el catálogo y tiene un grupo asignado
+    const servCatalogo = catServicios.find(s => s.nombre === serv);
+    
+    if (servCatalogo && servCatalogo.grupo) {
+      grupo = String(servCatalogo.grupo).trim();
+    } else {
+      // 2. Fallback inteligente para el historial viejo: 
+      // Si contiene 540, 541, 542... 549 lo asigna al 540
+      if (/(54[0-9])/.test(serv)) grupo = '540';
+      // Si contiene 570, 571, 572... 579 lo asigna al 570
+      else if (/(57[0-9])/.test(serv)) grupo = '570';
+    }
+
     const faltas = getHallazgos(ins.datos_formulario).length;
     return { ...ins, grupo, faltas, servicioStr: serv, conductorStr: ins.datos_formulario?.conductor || 'Desconocido' };
   });
@@ -292,6 +302,9 @@ export default function DashboardPage() {
   const data570 = dataGrupos.filter(d => d.grupo === '570');
   const faltas540 = data540.reduce((acc, ins) => acc + ins.faltas, 0);
   const faltas570 = data570.reduce((acc, ins) => acc + ins.faltas, 0);
+
+  const pieQx = { labels: ['Grupo 540', 'Grupo 570'], datasets: [{ data: [data540.length, data570.length], backgroundColor: ['#003366', '#FFCC00'] }] };
+  const pieFaltas = { labels: ['Grupo 540', 'Grupo 570'], datasets: [{ data: [faltas540, faltas570], backgroundColor: ['#dc3545', '#fd7e14'] }] };
 
   const pieQx = { labels: ['Grupo 540', 'Grupo 570'], datasets: [{ data: [data540.length, data570.length], backgroundColor: ['#003366', '#FFCC00'] }] };
   const pieFaltas = { labels: ['Grupo 540', 'Grupo 570'], datasets: [{ data: [faltas540, faltas570], backgroundColor: ['#dc3545', '#fd7e14'] }] };
@@ -345,7 +358,7 @@ export default function DashboardPage() {
             <select value={filtroTipo} onChange={(e)=>setFiltroTipo(e.target.value)} className="border border-gray-200 p-2 rounded-lg text-sm bg-white font-bold text-[#0B132B] max-w-xs"><option value="">Todos los Tipos</option>{tiposUnicos.map((t:any) => <option key={t} value={t}>{t}</option>)}</select>
             <select value={filtroEmpresa} onChange={(e)=>setFiltroEmpresa(e.target.value)} className="border border-gray-200 p-2 rounded-lg text-sm bg-white font-bold text-[#0B132B]"><option value="Todas">Ambas Empresas</option><option value="Antonio Buttini">Antonio Buttini</option><option value="Turismo Buttini">Turismo Buttini</option></select>
           </div>
-          <div className="flex items-center gap-3"><div className="text-right"><div className="font-bold text-[#0B132B] text-sm leading-tight">{adminUser.nombre}</div><div className="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Fleet Manager</div></div><div className="w-10 h-10 bg-[#0B132B] rounded-full flex items-center justify-center text-white font-bold shadow-md">A</div></div>
+          <div className="flex items-center gap-3"><div className="text-right"><div className="font-bold text-[#0B132B] text-sm leading-tight">{adminUser.nombre}</div><div className="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Administrador</div></div><div className="w-10 h-10 bg-[#0B132B] rounded-full flex items-center justify-center text-white font-bold shadow-md">A</div></div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#f8f9fa]">
