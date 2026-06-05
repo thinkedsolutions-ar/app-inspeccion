@@ -736,6 +736,51 @@ export default function DashboardPage() {
         </div>
       </div>
       
+      {/* MODAL: HISTORIAL DEL CONDUCTOR (Desde el Ranking de Flota) */}
+      {modalDriver && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
+          <div className="bg-[#f4f7f9] w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col h-[90vh] overflow-hidden">
+            <div className="bg-white p-6 flex justify-between items-center border-b shrink-0">
+              <div className="flex gap-4 items-center">
+                 <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center text-3xl">👨‍✈️</div>
+                 <div>
+                   <div className="flex items-center gap-2"><h2 className="font-black text-2xl text-[#0B132B]">{modalDriver.nombre.split('-')[1]?.trim() || modalDriver.nombre}</h2><span className="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-1 rounded-full border border-blue-100">CONDUCTOR VERIFICADO</span></div>
+                   <div className="text-sm text-gray-500 font-medium">Legajo ID: <span className="font-mono text-[#0B132B]">{modalDriver.nombre.split('-')[0]?.trim()}</span> • {modalDriver.count} Inspecciones Totales</div>
+                 </div>
+              </div>
+              <button onClick={() => setModalDriver(null)} className="text-3xl text-gray-400 hover:text-red-500 leading-none">&times;</button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              {flotaInspecciones.filter(i => i.datos_formulario?.conductor === modalDriver.nombre).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(ins => {
+                const f = getHallazgos(ins.datos_formulario);
+                const isCritico = f.length > 2; const isAdver = f.length > 0 && f.length <= 2; const isOk = f.length === 0;
+                return (
+                  <div key={ins.id} className="bg-white rounded-2xl p-5 border border-gray-100 flex gap-4 shadow-sm hover:shadow-md transition-shadow">
+                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-xl shrink-0 ${isCritico ? 'bg-red-600' : isAdver ? 'bg-yellow-500' : 'bg-green-500'}`}>
+                        {isCritico ? '!' : isAdver ? '⚠️' : '✓'}
+                     </div>
+                     <div className="flex-1">
+                        <div className="flex justify-between items-start mb-2">
+                           <div className="text-xs font-mono text-gray-500">{new Date(ins.created_at).toLocaleString('es-ES', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}</div>
+                           <button onClick={() => setModalIns(ins)} className="bg-gray-50 text-[#0B132B] font-bold px-3 py-1.5 rounded-lg text-xs border hover:bg-gray-100 transition-colors">👁️ Ver Reporte Original</button>
+                        </div>
+                        <span className={`text-[10px] font-black px-2 py-1 rounded uppercase mb-3 inline-block ${isCritico ? 'bg-red-50 text-red-600' : isAdver ? 'bg-yellow-50 text-yellow-700' : 'bg-green-50 text-green-700'}`}>
+                           {isCritico ? 'Inspección Crítica' : isAdver ? 'Advertencia' : 'Aprobada'}
+                        </span>
+                        <div className={`p-4 rounded-xl text-sm ${isCritico ? 'bg-red-50 text-red-900' : isAdver ? 'bg-yellow-50 text-yellow-900' : 'bg-green-50 text-green-900'}`}>
+                           <strong className="block mb-1">{isOk ? 'Sin Hallazgos:' : 'Hallazgos Registrados:'}</strong>
+                           {isOk ? "El conductor operó la unidad bajo todas las normas de seguridad e instructivos." : <ul className="list-disc pl-4 space-y-1">{f.map((x,idx)=><li key={idx}>{x}</li>)}</ul>}
+                        </div>
+                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL FICHA (Reutilizable para Reportes y Mapa) */}
       {modalIns && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
