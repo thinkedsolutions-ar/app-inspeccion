@@ -277,19 +277,20 @@ export default function DashboardPage() {
 // --- LÓGICA REPORTES OPERATIVOS (NUEVO TAB) ---
   const [grupoSel540, setGrupoSel540] = useState('');
   const [grupoSel570, setGrupoSel570] = useState('');
+  
+  // Nuevos estados para el filtro cruzado al hacer clic en los gráficos
+  const [selectedServ540, setSelectedServ540] = useState<string | null>(null);
+  const [selectedServ570, setSelectedServ570] = useState<string | null>(null);
 
   // Separar inspecciones por grupo (Buscando en catálogo o por patrón 54x / 57x)
   const dataGrupos = flotaInspecciones.map(ins => {
     const serv = ins.datos_formulario?.servicio || '';
     let grupo = 'Otro';
-    
-    // 1. Buscamos si el servicio exacto existe en el catálogo y tiene un grupo asignado
     const servCatalogo = catServicios.find(s => s.nombre === serv);
     
     if (servCatalogo && servCatalogo.grupo) {
       grupo = String(servCatalogo.grupo).trim();
     } else {
-      // 2. Fallback inteligente para el historial viejo
       if (/(54[0-9])/.test(serv)) grupo = '540';
       else if (/(57[0-9])/.test(serv)) grupo = '570';
     }
@@ -306,11 +307,17 @@ export default function DashboardPage() {
   const pieQx = { labels: ['Grupo 540', 'Grupo 570'], datasets: [{ data: [data540.length, data570.length], backgroundColor: ['#003366', '#FFCC00'] }] };
   const pieFaltas = { labels: ['Grupo 540', 'Grupo 570'], datasets: [{ data: [faltas540, faltas570], backgroundColor: ['#dc3545', '#fd7e14'] }] };
 
-  const getRankServicios = (data: any[]) => {
+  // Generador de gráficos con soporte de selección (Color gris para los no seleccionados)
+  const getRankServicios = (data: any[], selectedServ: string | null) => {
     const counts: any = {};
     data.forEach(d => { if(d.servicioStr) counts[d.servicioStr] = (counts[d.servicioStr] || 0) + 1; });
     const sorted = Object.entries(counts).sort((a:any, b:any) => b[1] - a[1]).slice(0, 10);
-    return { labels: sorted.map(s => s[0].substring(0,20)+'...'), datasets: [{ label: 'Inspecciones', data: sorted.map(s => s[1]), backgroundColor: '#003366' }] };
+    
+    const fullLabels = sorted.map(s => s[0]);
+    const labels = sorted.map(s => s[0].length > 20 ? s[0].substring(0,20)+'...' : s[0]);
+    const bgColors = fullLabels.map(label => selectedServ && label !== selectedServ ? '#e5e7eb' : '#003366');
+
+    return { fullLabels, labels, datasets: [{ label: 'Inspecciones', data: sorted.map(s => s[1]), backgroundColor: bgColors }] };
   };
 
   const getRankConductoresFaltas = (data: any[]) => {
@@ -319,8 +326,33 @@ export default function DashboardPage() {
       if(!stats[d.conductorStr]) stats[d.conductorStr] = 0;
       stats[d.conductorStr] += d.faltas;
     });
-    return Object.entries(stats).sort((a:any, b:any) => b[1] - a[1]).map(x => ({ nombre: x[0], faltas: x[1] }));
+    // MODIFICACIÓN: Filtramos (x[1] > 0) para NO mostrar los que tienen cero irregularidades
+    return Object.entries(stats).filter((x:any) => x[1] > 0).sort((a:any, b:any) => b[1] - a[1]).map(x => ({ nombre: x[0], faltas: x[1] }));
   };
+
+  // Opciones interactivas para atrapar el clic
+  const optionsBarraServicio = (fullLabels: string[], setter: any, currentSelection: string | null) => ({
+    maintainAspectRatio: false, 
+    layout: { padding: { top: 30, right: 10, left: 10 } },
+    plugins: { legend: { display: false }, datalabels: { anchor: 'end' as const, align: 'top' as const, offset: 4, color: '#333', font: { weight: 'bold' as const }, formatter: (v:number) => v > 0 ? v : '' } }, 
+    scales: { y: { beginAtZero: true, grace: '20%' } },
+    onClick: (e: any, elements: any) => {
+      if (elements.length > 0) {
+        const index = elements[0].index;
+        const label = fullLabels[index];
+        setter(label === currentSelection ? null : label);
+      } else {
+        setter(null);
+      }
+    }
+  });
+
+  const chartData540 = getRankServicios(data540, selectedServ540);
+  const chartData570 = getRankServicios(data570, selectedServ570);
+  
+  // Tablas de ranking filtradas según el servicio tocado en el gráfico
+  const rankCond540 = getRankConductoresFaltas(selectedServ540 ? data540.filter(d => d.servicioStr === selectedServ540) : data540);
+  const rankCond570 = getRankConductoresFaltas(selectedServ570 ? data570.filter(d => d.servicioStr === selectedServ570) : data570);
 
   if (!adminUser) return <div className="p-10 text-center">Cargando...</div>;
 
@@ -361,7 +393,7 @@ export default function DashboardPage() {
         <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#f8f9fa]">
           {loading ? <div className="text-center mt-20 font-bold text-xl animate-pulse text-gray-400">Analizando flota...</div> : (
             <>
-              {/* === REPORTES OPERATIVOS (NUEVA PESTAÑA) === */}
+              {/* === REPORTES OPERATIVOS === */}
               {activeTab === 'operativos' && (
                 <div className="space-y-6 animate-in fade-in duration-500">
                   <div><h2 className="text-2xl font-black text-[#0B132B]">Reportes Operativos por Grupos</h2><p className="text-gray-500 text-sm mt-1">Análisis específico de los grupos 540 y 570 (Según filtro de fechas superior)</p></div>
@@ -379,29 +411,39 @@ export default function DashboardPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                      <h3 className="text-[#0B132B] font-bold mb-4">Top 10 Servicios Controlados (Grupo 540)</h3>
-                      <div className="h-64"><Bar data={getRankServicios(data540)} options={chartOptionsNumbers} /></div>
+                      <h3 className="text-[#0B132B] font-bold mb-4">Top 10 Servicios Controlados (Grupo 540) <span className="text-[10px] text-gray-400 font-normal ml-1">(Clic para filtrar)</span></h3>
+                      <div className="h-64"><Bar data={chartData540} options={optionsBarraServicio(chartData540.fullLabels, setSelectedServ540, selectedServ540)} /></div>
                     </div>
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                      <h3 className="text-[#0B132B] font-bold mb-4">Top 10 Servicios Controlados (Grupo 570)</h3>
-                      <div className="h-64"><Bar data={getRankServicios(data570)} options={chartOptionsNumbers} /></div>
+                      <h3 className="text-[#0B132B] font-bold mb-4">Top 10 Servicios Controlados (Grupo 570) <span className="text-[10px] text-gray-400 font-normal ml-1">(Clic para filtrar)</span></h3>
+                      <div className="h-64"><Bar data={chartData570} options={optionsBarraServicio(chartData570.fullLabels, setSelectedServ570, selectedServ570)} /></div>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-[400px]">
-                      <h3 className="text-[#0B132B] font-bold mb-4">Ranking de Irregularidades (Grupo 540)</h3>
+                      <h3 className="text-[#0B132B] font-bold mb-4">
+                        Ranking de Irregularidades (Grupo 540)
+                        {selectedServ540 && <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded mt-1 truncate max-w-full inline-block ml-2 border border-blue-100">{selectedServ540}</div>}
+                      </h3>
                       <div className="overflow-y-auto flex-1 border rounded-lg">
                         <table className="w-full text-sm text-left"><thead className="bg-gray-50 text-gray-500 sticky top-0"><tr><th className="p-3">Conductor</th><th className="p-3 text-center">Irregularidades</th></tr></thead>
-                          <tbody>{getRankConductoresFaltas(data540).map((c:any, i:number) => <tr key={i} className="border-b"><td className="p-3 font-bold">{c.nombre}</td><td className="p-3 text-center"><span className="bg-red-100 text-red-700 px-2 py-1 rounded-lg font-bold">{c.faltas}</span></td></tr>)}</tbody>
+                          <tbody>
+                            {rankCond540.length === 0 ? <tr><td colSpan={2} className="p-4 text-center text-gray-400">Sin irregularidades reportadas.</td></tr> : rankCond540.map((c:any, i:number) => <tr key={i} className="border-b"><td className="p-3 font-bold">{c.nombre}</td><td className="p-3 text-center"><span className="bg-red-100 text-red-700 px-2 py-1 rounded-lg font-bold">{c.faltas}</span></td></tr>)}
+                          </tbody>
                         </table>
                       </div>
                     </div>
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-[400px]">
-                      <h3 className="text-[#0B132B] font-bold mb-4">Ranking de Irregularidades (Grupo 570)</h3>
+                      <h3 className="text-[#0B132B] font-bold mb-4">
+                        Ranking de Irregularidades (Grupo 570)
+                        {selectedServ570 && <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded mt-1 truncate max-w-full inline-block ml-2 border border-blue-100">{selectedServ570}</div>}
+                      </h3>
                       <div className="overflow-y-auto flex-1 border rounded-lg">
                         <table className="w-full text-sm text-left"><thead className="bg-gray-50 text-gray-500 sticky top-0"><tr><th className="p-3">Conductor</th><th className="p-3 text-center">Irregularidades</th></tr></thead>
-                          <tbody>{getRankConductoresFaltas(data570).map((c:any, i:number) => <tr key={i} className="border-b"><td className="p-3 font-bold">{c.nombre}</td><td className="p-3 text-center"><span className="bg-red-100 text-red-700 px-2 py-1 rounded-lg font-bold">{c.faltas}</span></td></tr>)}</tbody>
+                          <tbody>
+                            {rankCond570.length === 0 ? <tr><td colSpan={2} className="p-4 text-center text-gray-400">Sin irregularidades reportadas.</td></tr> : rankCond570.map((c:any, i:number) => <tr key={i} className="border-b"><td className="p-3 font-bold">{c.nombre}</td><td className="p-3 text-center"><span className="bg-red-100 text-red-700 px-2 py-1 rounded-lg font-bold">{c.faltas}</span></td></tr>)}
+                          </tbody>
                         </table>
                       </div>
                     </div>
