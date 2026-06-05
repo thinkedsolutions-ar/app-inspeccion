@@ -7,6 +7,7 @@ import { Bar, Line, Pie } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import dynamic from 'next/dynamic';
 import Papa from 'papaparse';
+import FichaVisualizador from '@/components/FichaVisualizador';
 
 const MapComponent = dynamic(() => import('./MapaInteract'), { ssr: false });
 
