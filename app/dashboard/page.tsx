@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import Papa from 'papaparse';
 import FichaVisualizador from '@/components/FichaVisualizador';
 
+
 const MapComponent = dynamic(() => import('./MapaInteract'), { ssr: false });
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement, ChartDataLabels);
@@ -55,6 +56,7 @@ export default function DashboardPage() {
   const [formUni, setFormUni] = useState({ numero: '', empresa: 'Antonio Buttini' });
   const [formServ, setFormServ] = useState({ grupo: '', linea: '', nombre: '', temporada: '', empresa: 'Antonio Buttini' });
   const [modalDriver, setModalDriver] = useState<any>(null);
+  const [filtroRankingConductor, setFiltroRankingConductor] = useState('');
 
   useEffect(() => {
     const session = localStorage.getItem('buttini_user');
@@ -581,43 +583,88 @@ export default function DashboardPage() {
                 </div>
               )}
 
+              {/* === FLOTA Y DESEMPEÑO === */}
               {activeTab === 'flota' && (
-                <div className="space-y-8 animate-in fade-in duration-500">
+                <div className="space-y-6 animate-in fade-in duration-500">
                   <div><h2 className="text-2xl font-black text-[#0B132B]">Panel de Inspecciones</h2><p className="text-gray-500 text-sm mt-1">Estado actual de la flota y conductores</p></div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border flex items-center gap-4 hover:shadow-md transition-shadow"><div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 text-2xl">👨‍✈️</div><div><div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Inspeccionados</div><div className="text-3xl font-black text-[#0B132B] leading-none">{rankingConductores.length}</div></div></div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border flex items-center gap-4 hover:shadow-md transition-shadow"><div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 text-2xl">⏳</div><div><div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Pendientes</div><div className="text-3xl font-black text-[#0B132B] leading-none">{Math.max(0, pendientesCount)}</div></div></div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border flex items-center gap-4 hover:shadow-md transition-shadow"><div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center text-red-500 text-2xl">⚠️</div><div><div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Alertas Críticas</div><div className="text-3xl font-black text-red-600 leading-none">{urgentInspections.length}</div></div></div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border flex items-center gap-4 hover:shadow-md transition-shadow"><div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-500 text-2xl">🛡️</div><div><div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Score Flota</div><div className="text-3xl font-black text-green-600 leading-none">{scoreFlota}%</div></div></div>
+                  
+                  {/* KPIs */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-4"><div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 text-xl">👨‍✈️</div><div><div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Inspeccionados</div><div className="text-2xl font-black text-[#0B132B] leading-none">{rankingConductores.length}</div></div></div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-4"><div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 text-xl">⏳</div><div><div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Pendientes</div><div className="text-2xl font-black text-[#0B132B] leading-none">{Math.max(0, pendientesCount)}</div></div></div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-4"><div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center text-red-500 text-xl">⚠️</div><div><div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Alertas Críticas</div><div className="text-2xl font-black text-red-600 leading-none">{urgentInspections.length}</div></div></div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-4"><div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-green-500 text-xl">🛡️</div><div><div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Score Flota</div><div className="text-2xl font-black text-green-600 leading-none">{scoreFlota}%</div></div></div>
                   </div>
-                  {urgentInspections.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-bold text-[#0B132B] mb-4 flex items-center gap-2"><span className="text-red-500 animate-pulse">🚨</span> Revisiones Urgentes</h3>
-                      <div className="flex gap-6 overflow-x-auto pb-4 snap-x">
-                        {urgentInspections.slice(0,10).map((ins, i) => (
-                          <div key={i} className="min-w-[300px] bg-white rounded-2xl shadow-sm border border-l-4 border-l-red-500 p-5 flex flex-col justify-between shrink-0 snap-start">
-                            <div><div className="flex justify-between items-start mb-3"><div><div className="font-black text-[#0B132B] truncate w-48">{ins.datos_formulario?.conductor || 'Desconocido'}</div><div className="text-xs text-gray-500">🕒 {new Date(ins.created_at).toLocaleString('es-ES', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}</div></div><span className="bg-red-50 text-red-600 text-[10px] font-black px-2 py-1 rounded">URGENTE</span></div><div className="bg-gray-50 p-3 rounded-xl mb-4"><div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Vehículo / Servicio</div><div className="font-bold text-[#0B132B] text-xs">{ins.datos_formulario?.unidad || '-'} • {ins.datos_formulario?.servicio || '-'}</div></div></div>
-                            <button onClick={() => setModalIns(ins)} className="w-full bg-[#0B132B] text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-900 transition-colors">Ver Detalles</button>
-                          </div>
-                        ))}
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    {/* COLUMNA IZQ: REVISIONES URGENTES COMPACTAS */}
+                    <div className="lg:col-span-1 bg-white rounded-2xl shadow-sm border flex flex-col h-[550px]">
+                      <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                        <h3 className="font-bold text-[#0B132B] flex items-center gap-2"><span className="text-red-500 animate-pulse">🚨</span> Revisiones Urgentes</h3>
+                        <span className="bg-red-100 text-red-700 font-bold px-2 py-1 rounded text-xs">{urgentInspections.length}</span>
+                      </div>
+                      <div className="overflow-y-auto flex-1 p-2 space-y-2">
+                        {urgentInspections.length === 0 ? <div className="p-10 text-center text-gray-400 text-sm">No hay urgencias.</div> : 
+                          urgentInspections.map((ins, i) => (
+                            <div key={i} className="bg-white rounded-lg border border-gray-100 border-l-4 border-l-red-500 p-3 hover:shadow-md transition-shadow">
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <div className="font-black text-[#0B132B] text-xs truncate max-w-[150px]" title={ins.datos_formulario?.conductor}>{ins.datos_formulario?.conductor?.split('-')[1]?.trim() || 'Desconocido'}</div>
+                                  <div className="text-[10px] text-gray-500">{new Date(ins.created_at).toLocaleString('es-ES', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}</div>
+                                </div>
+                                <button onClick={() => setModalIns(ins)} className="bg-[#0B132B] text-white px-3 py-1.5 rounded-lg font-bold text-[10px] hover:bg-blue-900">Ver</button>
+                              </div>
+                              <div className="bg-gray-50 p-2 rounded flex justify-between items-center">
+                                <span className="text-[10px] font-bold text-gray-500">Unidad: {ins.datos_formulario?.unidad || '-'}</span>
+                                <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">{ins.hallazgos?.length} Faltas</span>
+                              </div>
+                            </div>
+                          ))
+                        }
                       </div>
                     </div>
-                  )}
-                  <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-                    <div className="p-6 border-b flex justify-between items-center"><h3 className="text-lg font-bold text-[#0B132B]">Ranking de Novedades (Gravedad)</h3></div>
-                    <table className="w-full text-sm text-left"><thead className="bg-gray-50/50 text-gray-400 uppercase text-xs font-bold tracking-wider"><tr><th className="p-4 pl-6 w-16">Rank</th><th className="p-4">Conductor</th><th className="p-4 text-center">Última Unidad</th><th className="p-4 text-center">Estado / Faltas</th><th className="p-4 text-right pr-6">Acción</th></tr></thead>
-                      <tbody>
-                        {rankingConductores.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-gray-400">No hay inspecciones en este rango.</td></tr> : rankingConductores.map((c:any, i:number) => (
-                            <tr key={c.nombre} onClick={() => setModalDriver(c)} className="border-b hover:bg-gray-50/80 cursor-pointer group">
-                              <td className="p-4 pl-6"><div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs ${i < 3 ? 'bg-red-500 shadow-lg shadow-red-500/30' : 'bg-gray-300'}`}>{i + 1}</div></td>
-                              <td className="p-4"><div className="font-bold text-[#0B132B]">{c.nombre.split('-')[1]?.trim() || c.nombre}</div><div className="text-[10px] text-gray-400 font-mono">ID: {c.nombre.split('-')[0]?.trim()}</div></td>
-                              <td className="p-4 text-center"><span className="bg-gray-100 text-gray-600 font-bold px-3 py-1 rounded-lg text-xs">{c.unidad}</span></td>
-                              <td className="p-4 text-center">{c.faltas > 0 ? <span className="bg-red-50 text-red-600 font-bold px-3 py-1.5 rounded-lg text-xs border border-red-100 inline-flex items-center gap-1">⚠️ {c.faltas} FALTAS</span> : <span className="bg-green-50 text-green-600 font-bold px-3 py-1.5 rounded-lg text-xs border border-green-100 inline-flex items-center gap-1">✔️ SIN FALTAS</span>}</td>
-                              <td className="p-4 pr-6 text-right text-gray-300 group-hover:text-blue-600 font-bold">VER HISTORIAL ❯</td>
-                            </tr>
-                        ))}
-                      </tbody>
-                    </table>
+
+                    {/* COLUMNA DER: RANKING DE NOVEDADES */}
+                    <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border flex flex-col h-[550px]">
+                      <div className="p-4 border-b flex justify-between items-center shrink-0 flex-wrap gap-2">
+                        <h3 className="font-bold text-[#0B132B]">Ranking de Novedades</h3>
+                        <input 
+                          type="text" 
+                          placeholder="🔍 Buscar conductor..." 
+                          className="border p-1.5 rounded text-xs w-48"
+                          value={filtroRankingConductor}
+                          onChange={(e) => setFiltroRankingConductor(e.target.value)}
+                        />
+                      </div>
+                      <div className="overflow-y-auto flex-1 relative">
+                        <table className="w-full text-sm text-left">
+                          <thead className="bg-gray-50 text-gray-400 uppercase text-[10px] font-bold sticky top-0 z-10 shadow-sm">
+                            <tr><th className="p-3 pl-4 w-12 text-center">Rank</th><th className="p-3">Conductor</th><th className="p-3 text-center">Unidad</th><th className="p-3 text-center">Estado / Faltas</th><th className="p-3 text-right pr-4">Acción</th></tr>
+                          </thead>
+                          <tbody>
+                            {rankingConductores
+                              .filter((c:any) => c.faltas > 0) // <--- REGLA: SOLO CON FALTAS
+                              .filter((c:any) => c.nombre.toLowerCase().includes(filtroRankingConductor.toLowerCase())) // <--- BUSCADOR
+                              .map((c:any, i:number) => (
+                              <tr key={c.nombre} className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
+                                <td className="p-3 pl-4"><div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-white text-[10px] mx-auto ${i < 3 ? 'bg-red-500 shadow-md shadow-red-500/20' : 'bg-gray-300'}`}>{i + 1}</div></td>
+                                <td className="p-3"><div className="font-bold text-[#0B132B]">{c.nombre.split('-')[1]?.trim() || c.nombre}</div><div className="text-[10px] text-gray-400 font-mono">ID: {c.nombre.split('-')[0]?.trim()}</div></td>
+                                <td className="p-3 text-center"><span className="bg-gray-100 text-gray-600 font-bold px-2 py-1 rounded text-[10px]">{c.unidad}</span></td>
+                                <td className="p-3 text-center"><span className="bg-red-50 text-red-600 font-bold px-2 py-1 rounded border border-red-100 text-[10px]">⚠️ {c.faltas} FALTAS</span></td>
+                                <td className="p-3 pr-4 text-right">
+                                  <button onClick={() => setModalDriver(c)} className="text-blue-600 font-bold text-[10px] hover:underline bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 transition-colors">VER HISTORIAL</button>
+                                </td>
+                              </tr>
+                            ))}
+                            {rankingConductores.filter((c:any) => c.faltas > 0 && c.nombre.toLowerCase().includes(filtroRankingConductor.toLowerCase())).length === 0 && (
+                               <tr><td colSpan={5} className="p-10 text-center text-gray-400 text-sm">No se encontraron conductores con novedades.</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
                   </div>
                 </div>
               )}
