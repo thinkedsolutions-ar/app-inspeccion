@@ -275,7 +275,9 @@ export default function DashboardPage() {
   const mapDataToShow = (mapaVista === 'inspecciones' ? (desempenoDatos?.mapaIns || []) : (desempenoDatos?.mapaShifts || [])).filter((item: any) => selectedDateFilter ? item.created_at.substring(0,10) === selectedDateFilter : true);
 
 // --- LÓGICA REPORTES OPERATIVOS (NUEVO TAB) ---
-  
+  const [grupoSel540, setGrupoSel540] = useState('');
+  const [grupoSel570, setGrupoSel570] = useState('');
+
   // Separar inspecciones por grupo (Buscando en catálogo o por patrón 54x / 57x)
   const dataGrupos = flotaInspecciones.map(ins => {
     const serv = ins.datos_formulario?.servicio || '';
@@ -287,10 +289,8 @@ export default function DashboardPage() {
     if (servCatalogo && servCatalogo.grupo) {
       grupo = String(servCatalogo.grupo).trim();
     } else {
-      // 2. Fallback inteligente para el historial viejo: 
-      // Si contiene 540, 541, 542... 549 lo asigna al 540
+      // 2. Fallback inteligente para el historial viejo
       if (/(54[0-9])/.test(serv)) grupo = '540';
-      // Si contiene 570, 571, 572... 579 lo asigna al 570
       else if (/(57[0-9])/.test(serv)) grupo = '570';
     }
 
@@ -302,9 +302,6 @@ export default function DashboardPage() {
   const data570 = dataGrupos.filter(d => d.grupo === '570');
   const faltas540 = data540.reduce((acc, ins) => acc + ins.faltas, 0);
   const faltas570 = data570.reduce((acc, ins) => acc + ins.faltas, 0);
-
-  const pieQx = { labels: ['Grupo 540', 'Grupo 570'], datasets: [{ data: [data540.length, data570.length], backgroundColor: ['#003366', '#FFCC00'] }] };
-  const pieFaltas = { labels: ['Grupo 540', 'Grupo 570'], datasets: [{ data: [faltas540, faltas570], backgroundColor: ['#dc3545', '#fd7e14'] }] };
 
   const pieQx = { labels: ['Grupo 540', 'Grupo 570'], datasets: [{ data: [data540.length, data570.length], backgroundColor: ['#003366', '#FFCC00'] }] };
   const pieFaltas = { labels: ['Grupo 540', 'Grupo 570'], datasets: [{ data: [faltas540, faltas570], backgroundColor: ['#dc3545', '#fd7e14'] }] };
