@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import FichaVisualizador from '@/components/FichaVisualizador';
+import dynamic from 'next/dynamic';
+const MapPicker = dynamic(() => import('./MapPicker'), { ssr: false });
 
 export default function InspeccionPage() {
   const [user, setUser] = useState<any>(null);
@@ -20,6 +22,10 @@ export default function InspeccionPage() {
   const [showModalClave, setShowModalClave] = useState(false);
   const [claveActual, setClaveActual] = useState('');
   const [claveNueva, setClaveNueva] = useState('');
+  const [isAdminManual, setIsAdminManual] = useState(false);
+  const [manualInspector, setManualInspector] = useState('');
+  const [manualPos, setManualPos] = useState<any>(null);
+  const [listaInspectoresUsers, setListaInspectoresUsers] = useState<any[]>([]);
 
   // Listas y Seguimientos
   const [listas, setListas] = useState<any>({ conductores: [], unidades: [], servicios: [] });
@@ -38,33 +44,72 @@ export default function InspeccionPage() {
     const userData = JSON.parse(session);
     setUser(userData);
     
-    navigator.geolocation.getCurrentPosition(
-      () => setLocationEnabled(true),
-      (err) => setLocationEnabled(false)
-    );
+    // OBLIGAR A COMPARTIR UBICACIÓN (Solo si NO es Admin Manual)
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('modo');
 
-    checkJornada(userData.username);
+    if (userData.rol === 'Admin') {
+       if (mode === 'manual' && userData.puede_cargar_manual) {
+           setIsAdminManual(true);
+           setEstadoJornada('TRABAJANDO'); // Forza entrada directa al formulario
+           setLocationEnabled(true); // Evita el bloqueo del GPS
+           fetchInspectoresUsers();
+       } else {
+           window.location.href = '/dashboard';
+           return;
+       }
+    } else {
+       navigator.geolocation.getCurrentPosition(() => setLocationEnabled(true), () => setLocationEnabled(false));
+       checkJornada(userData.username);
+    }
+
     const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    const iso = now.toISOString();
-    setFecha(iso.substring(0, 10)); setHora(iso.substring(11, 16));
+    setFecha(now.toISOString().substring(0, 10)); setHora(now.toISOString().substring(11, 16));
 
-    fetchCatalogos();
-    fetchPendientes(userData.nombre);
+    fetchCatalogos(); fetchPendientes(userData.nombre);
   }, []);
+
+  const fetchInspectoresUsers = async () => {
+    const { data } = await supabase.from('users').select('nombre').eq('rol', 'Inspector').order('nombre');
+    setListaInspectoresUsers(data || []);
+  };
 
   // ESCUCHAR SEÑAL DE ÉXITO DESDE LA OTRA APP (postMessage)
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data && event.data.status === 'success_siniestro') {
-        handleChange('siniestro_cargado_mapa', 'SÍ');
-        alert("🚨 ¡Siniestro registrado en el mapa de siniestralidad con éxito!");
-        setShowSiniestroModal(false); // Cierra el modal automáticamente
-      }
-    };
+    const session = localStorage.getItem('buttini_user');
+    if (!session) { window.location.href = '/'; return; }
+    const userData = JSON.parse(session);
+    setUser(userData);
+    
+    // OBLIGAR A COMPARTIR UBICACIÓN (Solo si NO es Admin Manual)
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('modo');
 
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    if (userData.rol === 'Admin') {
+       if (mode === 'manual' && userData.puede_cargar_manual) {
+           setIsAdminManual(true);
+           setEstadoJornada('TRABAJANDO'); // Forza entrada directa al formulario
+           setLocationEnabled(true); // Evita el bloqueo del GPS
+           fetchInspectoresUsers();
+       } else {
+           window.location.href = '/dashboard';
+           return;
+       }
+    } else {
+       navigator.geolocation.getCurrentPosition(() => setLocationEnabled(true), () => setLocationEnabled(false));
+       checkJornada(userData.username);
+    }
+
+    const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    setFecha(now.toISOString().substring(0, 10)); setHora(now.toISOString().substring(11, 16));
+
+    fetchCatalogos(); fetchPendientes(userData.nombre);
   }, []);
+
+  const fetchInspectoresUsers = async () => {
+    const { data } = await supabase.from('users').select('nombre').eq('rol', 'Inspector').order('nombre');
+    setListaInspectoresUsers(data || []);
+  };
 
   const fetchCatalogos = async () => {
     const [resCond, resUni, resServ] = await Promise.all([
@@ -169,68 +214,66 @@ export default function InspeccionPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const esAspirante = tipoInspeccion === '3-SEGUIMIENTO DE PERSONAL' && subtipoPersonal === 'Aspirante';
     if (!esAspirante && formData.conductor) {
       const existe = listas.conductores.find((c:any) => c.fullName === formData.conductor);
-      if (!existe && tipoInspeccion !== '4-SEGUIMIENTO DE TEMAS' && tipoInspeccion !== '5-INSPECCION AREA DE DESCANSO') {
-        alert("Atención: Debe seleccionar un conductor válido de la lista.");
-        return;
+      if (!existe && !tipoInspeccion.includes('TEMAS') && !tipoInspeccion.includes('DESCANSO')) {
+        alert("Atención: Debe seleccionar un conductor válido de la lista."); return;
       }
     }
 
-    // --- NUEVO: AUTO-GUARDADO DE SERVICIOS TURISMO ---
     const empresaActual = esTurismo ? 'Turismo Buttini' : 'Antonio Buttini';
     if (formData.servicio && esTurismo) {
       const existeServicio = listas.servicios.find((s:any) => s.nombre === formData.servicio && s.empresa === 'Turismo Buttini');
-      if (!existeServicio) {
-        await supabase.from('servicios').insert([{ nombre: formData.servicio, empresa: 'Turismo Buttini', activo: true }]);
-      }
+      if (!existeServicio) { await supabase.from('servicios').insert([{ nombre: formData.servicio, empresa: 'Turismo Buttini', activo: true }]); }
     }
 
     setLoading(true);
     try {
       const idInspeccion = `${new Date().getTime()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
       let fotosUrls: string[] = [];
-      
-      // LÓGICA DE FOTOS CON CAPTURA DE ERRORES
       if (files.length > 0) {
         for (const file of files) {
           const fileName = `${idInspeccion}_${Math.random()}.${file.name.split('.').pop()}`;
           const { error: uploadError } = await supabase.storage.from('fotos-inspecciones').upload(fileName, file);
-          
-          if (uploadError) {
-            alert(`Error al subir la imagen: ${uploadError.message}`);
-            setLoading(false);
-            return; 
-          }
+          if (uploadError) { alert(`Error al subir la imagen: ${uploadError.message}`); setLoading(false); return; }
           const { data: urlData } = supabase.storage.from('fotos-inspecciones').getPublicUrl(fileName);
           fotosUrls.push(urlData.publicUrl);
         }
       }
 
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-        await supabase.from('inspections').insert([{
+      // FUNCIÓN ENCAPSULADA PARA GUARDAR EL REGISTRO
+      const ejecutarGuardado = async (lat: number, lon: number) => {
+         let timestampOficial = new Date().toISOString();
+         if (isAdminManual) {
+            // El Admin está forzando la fecha y hora manual
+            const fechaManualObj = new Date(`${fecha}T${hora}:00`);
+            timestampOficial = fechaManualObj.toISOString();
+         }
+
+         await supabase.from('inspections').insert([{
           id: idInspeccion, 
-          inspector: user.nombre,
+          inspector: isAdminManual ? manualInspector : user.nombre,
           tipo: tipoInspeccion + (subtipoPersonal ? ` - ${subtipoPersonal}` : ''),
-          lat: pos.coords.latitude, 
-          lon: pos.coords.longitude,
-          fotos: fotosUrls, 
-          datos_formulario: { 
-            ...formData, 
-            fecha_formulario: fecha, 
-            hora_formulario: hora,
-            empresa: esTurismo ? 'Turismo Buttini' : 'Antonio Buttini'
-          },
+          lat: lat, lon: lon, fotos: fotosUrls, 
+          created_at: timestampOficial,
+          datos_formulario: { ...formData, fecha_formulario: fecha, hora_formulario: hora, empresa: empresaActual },
           obs_general: formData.observaciones || formData.observacion_temas || ''
         }]);
-        alert("¡Inspección guardada con éxito!"); 
-        window.location.reload();
-      });
-    } catch (err) { 
-      alert("Error al guardar la inspección."); 
-    }
+        alert("¡Inspección guardada con éxito!"); window.location.reload();
+      };
+
+      if (isAdminManual) {
+         if (!manualPos) { alert("⚠️ Debe marcar un punto en el mapa interactivo."); setLoading(false); return; }
+         if (!manualInspector) { alert("⚠️ Debe seleccionar a qué Inspector se le asignará el reporte."); setLoading(false); return; }
+         ejecutarGuardado(manualPos.lat, manualPos.lng);
+      } else {
+         navigator.geolocation.getCurrentPosition(
+           async (pos) => ejecutarGuardado(pos.coords.latitude, pos.coords.longitude),
+           () => { alert("No se pudo obtener su ubicación GPS."); setLoading(false); }
+         );
+      }
+    } catch (err) { alert("Error al guardar."); setLoading(false); } 
   };
 
   const renderSearchFields = (includesInstructor = false) => {
@@ -348,13 +391,20 @@ export default function InspeccionPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 text-black pb-10">
-      <nav className="bg-[#333] text-white p-3 flex justify-between items-center sticky top-0 z-40">
-        <div className="flex flex-col"><span className="font-bold text-sm">👤 {user.nombre}</span><span className="text-[10px] text-gray-400 uppercase">{estadoJornada}</span></div>
+      <nav className={`p-3 flex justify-between items-center sticky top-0 z-40 ${isAdminManual ? 'bg-red-700' : 'bg-[#333]'} text-white`}>
+        <div className="flex flex-col">
+          <span className="font-bold text-sm">👤 {user.nombre}</span>
+          <span className="text-[10px] text-gray-200 uppercase">{isAdminManual ? '⚡ MODO ADMINISTRADOR' : estadoJornada}</span>
+        </div>
         <div className="flex gap-2">
-          <button type="button" onClick={() => setShowModalClave(true)} className="bg-[#0055a5] px-3 py-1 rounded text-xs font-bold border border-white">🔑 Clave</button>
-          {estadoJornada === 'TRABAJANDO' && <button type="button" onClick={() => logShift('INICIO_REF')} className="bg-orange-500 px-3 py-1 rounded text-xs font-bold border border-white">☕ PAUSA</button>}
-          {estadoJornada === 'REFRIGERIO' && <button type="button" onClick={() => logShift('FIN_REF')} className="bg-green-500 px-3 py-1 rounded text-xs font-bold border border-white">▶ REANUDAR</button>}
-          {estadoJornada === 'TRABAJANDO' && <button type="button" onClick={() => logShift('FIN')} className="bg-[#003366] px-3 py-1 rounded text-xs font-bold text-yellow-400 border border-white">FIN DÍA</button>}
+          {!isAdminManual && (
+            <>
+              <button type="button" onClick={() => setShowModalClave(true)} className="bg-[#0055a5] px-3 py-1 rounded text-xs font-bold border border-white">🔑 Clave</button>
+              {estadoJornada === 'TRABAJANDO' && <button type="button" onClick={() => logShift('INICIO_REF')} className="bg-orange-500 px-3 py-1 rounded text-xs font-bold border border-white">☕ PAUSA</button>}
+              {estadoJornada === 'REFRIGERIO' && <button type="button" onClick={() => logShift('FIN_REF')} className="bg-green-500 px-3 py-1 rounded text-xs font-bold border border-white">▶ REANUDAR</button>}
+              {estadoJornada === 'TRABAJANDO' && <button type="button" onClick={() => logShift('FIN')} className="bg-[#003366] px-3 py-1 rounded text-xs font-bold text-yellow-400 border border-white">FIN DÍA</button>}
+            </>
+          )}
         </div>
       </nav>
 
@@ -402,18 +452,31 @@ export default function InspeccionPage() {
                 <div><label className="text-xs font-bold text-[#003366]">📅 Fecha</label><input type="date" className="w-full p-2 border rounded" value={fecha} onChange={(e)=>setFecha(e.target.value)} required /></div>
                 <div><label className="text-xs font-bold text-[#003366]">🕒 Hora</label><input type="time" className="w-full p-2 border rounded" value={hora} onChange={(e)=>setHora(e.target.value)} required /></div>
                 
-                {/* CAMPO INSPECTOR + CHECK TURISMO */}
                 <div className="col-span-2 flex justify-between items-center bg-gray-200 p-2 rounded border">
-                  <div>
+                  <div className="w-full mr-4">
                     <label className="text-xs font-bold text-[#003366] flex items-center gap-1">👮 Inspector</label>
-                    <div className="font-bold text-[#003366] text-sm px-1">{user.nombre}</div>
+                    {isAdminManual ? (
+                      <select className="w-full p-1.5 rounded border border-gray-400 text-sm font-bold mt-1" value={manualInspector} onChange={e=>setManualInspector(e.target.value)} required>
+                        <option value="">-- Seleccione Inspector Destino --</option>
+                        {listaInspectoresUsers.map((insp:any) => <option key={insp.nombre} value={insp.nombre}>{insp.nombre}</option>)}
+                      </select>
+                    ) : (
+                      <div className="font-bold text-[#003366] text-sm px-1">{user.nombre}</div>
+                    )}
                   </div>
-                  <label className="flex items-center gap-2 bg-white px-3 py-1.5 border border-gray-300 rounded shadow-sm cursor-pointer text-[#003366] font-bold text-xs select-none">
-                    <input type="checkbox" checked={esTurismo} onChange={(e) => setEsTurismo(e.target.checked)} className="w-4 h-4 accent-[#003366] cursor-pointer" />
-                    Turismo
+                  <label className="flex items-center gap-2 bg-white px-3 py-1.5 border border-gray-300 rounded shadow-sm cursor-pointer text-[#003366] font-bold text-xs select-none h-fit">
+                    <input type="checkbox" checked={esTurismo} onChange={(e) => setEsTurismo(e.target.checked)} className="w-4 h-4 accent-[#003366] cursor-pointer" /> Turismo
                   </label>
                 </div>
               </div>
+
+              {/* MAPA MANUAL PARA ADMINISTRADORES */}
+              {isAdminManual && (
+                <div className="col-span-2 bg-yellow-50 p-4 rounded-xl border-2 border-yellow-400 mb-6 shadow-sm">
+                  <label className="text-xs font-black text-red-600 block mb-2 uppercase animate-pulse">📍 SELECCIONE EL PUNTO GPS EXACTO (Haga clic en el mapa)</label>
+                  <MapPicker position={manualPos} setPosition={setManualPos} />
+                </div>
+              )}
 
               <div className="bg-[#eef4f9] p-4 rounded border-l-4 border-[#003366] mb-6">
                 <label className="block font-bold text-[#003366] mb-2 uppercase text-sm">📋 TIPO DE INSPECCIÓN</label>

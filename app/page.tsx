@@ -38,7 +38,7 @@ export default function LoginPage() {
       window.location.href = '/inspeccion';
     }
   };
-
+  
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#003366] p-4">
       <div className="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm text-center">

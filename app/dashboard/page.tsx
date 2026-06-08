@@ -94,6 +94,7 @@ export default function DashboardPage() {
   const handleCreateUser = async (e: React.FormEvent) => { e.preventDefault(); await supabase.from('users').insert([newUser]); setNewUser({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' }); fetchUsers(); };
   const handleDeleteUser = async (id: string, username: string) => { if (confirm(`¿Eliminar al usuario ${username}?`)) { await supabase.from('users').delete().eq('id', id); fetchUsers(); } };
   const handleResetPassword = async (id: string, username: string) => { const newPass = prompt(`NUEVA CONTRASEÑA para ${username}:`); if (newPass) { await supabase.from('users').update({ password: newPass }).eq('id', id); } };
+  const handleToggleCargaManual = async (id: string, current: boolean) => { await supabase.from('users').update({ puede_cargar_manual: !current }).eq('id', id);  fetchUsers();  };
   const handleCambiarClavePropia = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true);
     const { data, error } = await supabase.from('users').select('*').eq('username', adminUser.username).eq('password', claveActual).single();
@@ -392,6 +393,11 @@ export default function DashboardPage() {
           <button onClick={() => setActiveTab('mapa')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'mapa' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>📍 Mapa Satelital</button>
           <button onClick={() => setActiveTab('usuarios')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'usuarios' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>⚙️ Usuarios</button>
           <button onClick={() => setActiveTab('config')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'config' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>🛠️ Configuración</button>
+          {adminUser?.puede_cargar_manual && (
+            <a href="/inspeccion?modo=manual" target="_blank" className="w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all text-white/60 hover:bg-white/5 hover:text-white mt-4 border border-dashed border-white/20">
+              ⚡ Carga Manual
+            </a>
+          )}
         </nav>
         <div className="p-4"><button onClick={() => { localStorage.removeItem('buttini_user'); window.location.href = '/'; }} className="w-full bg-red-500/10 text-red-500 border border-red-500/20 p-3 rounded-lg font-bold hover:bg-red-500 hover:text-white transition-all text-sm flex justify-center items-center gap-2">↪ Cerrar Sesión</button></div>
       </div>
@@ -728,7 +734,7 @@ export default function DashboardPage() {
                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                    <table className="w-full text-sm text-left">
                      <thead className="bg-gray-50/50 text-gray-400 uppercase text-xs font-bold tracking-wider">
-                       <tr><th className="p-4 pl-6">Usuario</th><th className="p-4">Nombre</th><th className="p-4 text-center">Rol</th><th className="p-4 text-center">Jornada</th><th className="p-4 text-right pr-6">Acciones</th></tr>
+                       <tr><th className="p-4 pl-6">Usuario</th><th className="p-4">Nombre</th><th className="p-4 text-center">Rol</th><th className="p-4 text-center">Jornada</th><th className="p-4 text-center text-red-600">Admin Carga</th><th className="p-4 text-right pr-6">Acciones</th></tr>
                      </thead>
                      <tbody>
                        {usuarios.map(u => (
@@ -740,6 +746,13 @@ export default function DashboardPage() {
                            <td className="p-4 pr-6 text-right flex gap-2 justify-end">
                              <button onClick={() => handleResetPassword(u.id, u.username)} className="text-blue-600 font-bold hover:bg-blue-100 transition-colors text-xs bg-blue-50 px-3 py-1.5 rounded-lg">🔑 Reset Clave</button>
                              <button onClick={() => handleDeleteUser(u.id, u.username)} className="text-red-600 font-bold hover:bg-red-100 transition-colors text-xs bg-red-50 px-3 py-1.5 rounded-lg">❌ Eliminar</button>
+                           <td className="p-4 text-center">
+                              {u.rol === 'Admin' ? (
+                                <label className="flex items-center justify-center cursor-pointer">
+                                  <input type="checkbox" checked={u.puede_cargar_manual || false} onChange={() => handleToggleCargaManual(u.id, u.puede_cargar_manual)} className="w-4 h-4 accent-red-600" />
+                                </label>
+                              ) : <span className="text-gray-300">-</span>}
+                            </td>  
                            </td>
                          </tr>
                        ))}
