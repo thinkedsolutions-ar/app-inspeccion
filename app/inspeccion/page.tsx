@@ -74,43 +74,6 @@ export default function InspeccionPage() {
     setListaInspectoresUsers(data || []);
   };
 
-  // ESCUCHAR SEÑAL DE ÉXITO DESDE LA OTRA APP (postMessage)
-  useEffect(() => {
-    const session = localStorage.getItem('buttini_user');
-    if (!session) { window.location.href = '/'; return; }
-    const userData = JSON.parse(session);
-    setUser(userData);
-    
-    // OBLIGAR A COMPARTIR UBICACIÓN (Solo si NO es Admin Manual)
-    const params = new URLSearchParams(window.location.search);
-    const mode = params.get('modo');
-
-    if (userData.rol === 'Admin') {
-       if (mode === 'manual' && userData.puede_cargar_manual) {
-           setIsAdminManual(true);
-           setEstadoJornada('TRABAJANDO'); // Forza entrada directa al formulario
-           setLocationEnabled(true); // Evita el bloqueo del GPS
-           fetchInspectoresUsers();
-       } else {
-           window.location.href = '/dashboard';
-           return;
-       }
-    } else {
-       navigator.geolocation.getCurrentPosition(() => setLocationEnabled(true), () => setLocationEnabled(false));
-       checkJornada(userData.username);
-    }
-
-    const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    setFecha(now.toISOString().substring(0, 10)); setHora(now.toISOString().substring(11, 16));
-
-    fetchCatalogos(); fetchPendientes(userData.nombre);
-  }, []);
-
-  const fetchInspectoresUsers = async () => {
-    const { data } = await supabase.from('users').select('nombre').eq('rol', 'Inspector').order('nombre');
-    setListaInspectoresUsers(data || []);
-  };
-
   const fetchCatalogos = async () => {
     const [resCond, resUni, resServ] = await Promise.all([
       supabase.from('conductores').select('*').eq('activo', true),
