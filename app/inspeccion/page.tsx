@@ -191,19 +191,11 @@ export default function InspeccionPage() {
     setLoading(true);
     navigator.geolocation.getCurrentPosition(async (pos) => {
       await supabase.from('shifts').insert([{
-        username: user.username, 
-        nombre: user.nombre, 
-        accion: accion, 
-        lat: pos.coords.latitude, 
-        lon: pos.coords.longitude
+        username: user.username, nombre: user.nombre, accion: accion,
+        lat: pos.coords.latitude, lon: pos.coords.longitude
       }]);
-      
-      if (accion === 'FIN') { 
-        localStorage.removeItem('buttini_user'); 
-        window.location.href = '/'; 
-      } else {
-        checkJornada(user.username);
-      }
+      if (accion === 'FIN') { localStorage.removeItem('buttini_user'); window.location.href = '/'; }
+      else checkJornada(user.username);
       setLoading(false);
     });
   };
@@ -246,7 +238,6 @@ export default function InspeccionPage() {
       const ejecutarGuardado = async (lat: number, lon: number) => {
          let timestampOficial = new Date().toISOString();
          if (isAdminManual) {
-            // El Admin está forzando la fecha y hora manual
             const fechaManualObj = new Date(`${fecha}T${hora}:00`);
             timestampOficial = fechaManualObj.toISOString();
          }
