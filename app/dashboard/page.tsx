@@ -40,6 +40,9 @@ export default function DashboardPage() {
   const [modalIns, setModalIns] = useState<any>(null);
   const [nuevoComentario, setNewComentario] = useState('');
   const [newUser, setNewUser] = useState({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' });
+  const [showModalClave, setShowModalClave] = useState(false);
+  const [claveActual, setClaveActual] = useState('');
+  const [claveNueva, setClaveNueva] = useState('');
 
   const [selectedInspectorChart, setSelectedInspectorChart] = useState<string | null>(null);
   const [selectedTypeChart, setSelectedTypeChart] = useState<string | null>(null);
@@ -91,7 +94,21 @@ export default function DashboardPage() {
   const handleCreateUser = async (e: React.FormEvent) => { e.preventDefault(); await supabase.from('users').insert([newUser]); setNewUser({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' }); fetchUsers(); };
   const handleDeleteUser = async (id: string, username: string) => { if (confirm(`¿Eliminar al usuario ${username}?`)) { await supabase.from('users').delete().eq('id', id); fetchUsers(); } };
   const handleResetPassword = async (id: string, username: string) => { const newPass = prompt(`NUEVA CONTRASEÑA para ${username}:`); if (newPass) { await supabase.from('users').update({ password: newPass }).eq('id', id); } };
-  
+  const handleCambiarClavePropia = async (e: React.FormEvent) => {
+    e.preventDefault(); setLoading(true);
+    const { data, error } = await supabase.from('users').select('*').eq('username', adminUser.username).eq('password', claveActual).single();
+    if (error || !data) { alert("La contraseña actual es incorrecta."); setLoading(false); return; }
+    const { error: updateError } = await supabase.from('users').update({ password: claveNueva }).eq('username', adminUser.username);
+    if (updateError) alert("Error al actualizar la contraseña.");
+    else {
+      alert("Contraseña actualizada con éxito.");
+      const updatedUser = { ...adminUser, password: claveNueva };
+      localStorage.setItem('buttini_user', JSON.stringify(updatedUser));
+      setAdminUser(updatedUser); setShowModalClave(false); setClaveActual(''); setClaveNueva('');
+    }
+    setLoading(false);
+  };
+
   const handleAddComentario = async () => { if (!nuevoComentario.trim()) return; setLoading(true); await supabase.from('followups').insert([{ inspection_id: modalIns.id, usuario: adminUser.nombre, accion: nuevoComentario }]); setNewComentario(''); await fetchData(); setLoading(false); };
   const handleCerrarTema = async () => { if(!confirm("¿Cerrar seguimiento?")) return; setLoading(true); await supabase.from('followups').insert([{ inspection_id: modalIns.id, usuario: adminUser.nombre, accion: '[CERRADO] El tema ha sido cerrado por el administrador.' }]); await fetchData(); setModalIns(null); setLoading(false); };
 
@@ -389,7 +406,7 @@ export default function DashboardPage() {
             <select value={filtroTipo} onChange={(e)=>setFiltroTipo(e.target.value)} className="border border-gray-200 p-2 rounded-lg text-sm bg-white font-bold text-[#0B132B] max-w-xs"><option value="">Todos los Tipos</option>{tiposUnicos.map((t:any) => <option key={t} value={t}>{t}</option>)}</select>
             <select value={filtroEmpresa} onChange={(e)=>setFiltroEmpresa(e.target.value)} className="border border-gray-200 p-2 rounded-lg text-sm bg-white font-bold text-[#0B132B]"><option value="Todas">Ambas Empresas</option><option value="Antonio Buttini">Antonio Buttini</option><option value="Turismo Buttini">Turismo Buttini</option></select>
           </div>
-          <div className="flex items-center gap-3"><div className="text-right"><div className="font-bold text-[#0B132B] text-sm leading-tight">{adminUser.nombre}</div><div className="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Administrador</div></div><div className="w-10 h-10 bg-[#0B132B] rounded-full flex items-center justify-center text-white font-bold shadow-md">A</div></div>
+          <div className="flex items-center gap-3"><button onClick={() => setShowModalClave(true)} className="text-xs bg-gray-100 hover:bg-gray-200 border border-gray-300 text-[#0B132B] font-bold px-3 py-1.5 rounded-lg transition-colors">🔑 Cambiar Clave</button><div className="text-right"><div className="font-bold text-[#0B132B] text-sm leading-tight">{adminUser.nombre}</div><div className="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Administrador</div></div><div className="w-10 h-10 bg-[#0B132B] rounded-full flex items-center justify-center text-white font-bold shadow-md">A</div></div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#f8f9fa]">
@@ -848,6 +865,22 @@ export default function DashboardPage() {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 mt-8"><h3 className="font-bold text-[#0B132B] border-b-2 border-blue-500 pb-2 text-lg">Ubicación de Registros ({mesDesempeno}){selectedDateFilter && <span className="ml-2 text-sm text-blue-600 font-normal bg-blue-100 px-2 py-1 rounded">(Día: {selectedDateFilter.split('-').reverse().join('/')})</span>}</h3><div className="flex gap-4 items-center bg-gray-50 p-2 rounded border shadow-sm"><label className="flex items-center gap-2 text-sm font-bold text-[#0B132B] cursor-pointer"><input type="radio" checked={mapaVista === 'inspecciones'} onChange={() => setMapaVista('inspecciones')} className="accent-blue-600 w-4 h-4" />Inspecciones</label><label className="flex items-center gap-2 text-sm font-bold text-[#0B132B] cursor-pointer"><input type="radio" checked={mapaVista === 'jornadas'} onChange={() => setMapaVista('jornadas')} className="accent-blue-600 w-4 h-4" />Inicios/Fin de Jornada</label></div></div>
               <div className="h-[400px] rounded-xl border-2 border-gray-200 overflow-hidden shadow-inner bg-gray-100"><MapComponent inspecciones={mapDataToShow} onVerFicha={(ins:any) => { if(ins.isShift) { alert("📍 Registro automático de GPS de Jornada."); } else { setModalDesempeno(null); setModalIns(ins); } }} /></div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL CAMBIO DE CLAVE PROPIA */}
+      {showModalClave && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[120] backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="bg-[#0B132B] text-white p-4 flex justify-between items-center">
+              <h2 className="font-bold">Cambiar Mi Contraseña</h2>
+              <button onClick={() => setShowModalClave(false)} className="text-2xl leading-none hover:text-red-400">&times;</button>
+            </div>
+            <form onSubmit={handleCambiarClavePropia} className="p-6 space-y-4">
+              <div><label className="block text-xs font-bold text-[#0B132B] mb-1">Contraseña Actual</label><input type="password" value={claveActual} onChange={(e) => setClaveActual(e.target.value)} className="w-full border p-2 rounded bg-gray-50 text-sm" required /></div>
+              <div><label className="block text-xs font-bold text-[#0B132B] mb-1">Nueva Contraseña</label><input type="password" value={claveNueva} onChange={(e) => setClaveNueva(e.target.value)} className="w-full border p-2 rounded bg-gray-50 text-sm" required /></div>
+              <button type="submit" disabled={loading} className="w-full bg-green-600 text-white font-bold p-3 rounded-lg hover:bg-green-700 transition-colors">{loading ? 'GUARDANDO...' : 'GUARDAR CAMBIO'}</button>
+            </form>
           </div>
         </div>
       )}

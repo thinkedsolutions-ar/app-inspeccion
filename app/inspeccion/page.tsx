@@ -17,6 +17,9 @@ export default function InspeccionPage() {
   const [subtipoPersonal, setSubtipoPersonal] = useState('');
   const [formData, setFormData] = useState<any>({});
   const [files, setFiles] = useState<File[]>([]);
+  const [showModalClave, setShowModalClave] = useState(false);
+  const [claveActual, setClaveActual] = useState('');
+  const [claveNueva, setClaveNueva] = useState('');
 
   // Listas y Seguimientos
   const [listas, setListas] = useState<any>({ conductores: [], unidades: [], servicios: [] });
@@ -106,6 +109,25 @@ export default function InspeccionPage() {
     await supabase.from('followups').insert([{ inspection_id: modalSeg.id, usuario: user.nombre, accion: nuevoComentario }]);
     setNewComentario('');
     abrirModalSeguimiento(modalSeg);
+    setLoading(false);
+  };
+
+  const handleCambiarClave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const { data, error } = await supabase.from('users').select('*').eq('username', user.username).eq('password', claveActual).single();
+    if (error || !data) {
+      alert("La contraseña actual es incorrecta.");
+      setLoading(false); return;
+    }
+    const { error: updateError } = await supabase.from('users').update({ password: claveNueva }).eq('username', user.username);
+    if (updateError) { alert("Error al actualizar la contraseña."); } 
+    else {
+      alert("Contraseña actualizada con éxito.");
+      const updatedUser = { ...user, password: claveNueva };
+      localStorage.setItem('buttini_user', JSON.stringify(updatedUser));
+      setUser(updatedUser); setShowModalClave(false); setClaveActual(''); setClaveNueva('');
+    }
     setLoading(false);
   };
 
@@ -329,9 +351,10 @@ export default function InspeccionPage() {
       <nav className="bg-[#333] text-white p-3 flex justify-between items-center sticky top-0 z-40">
         <div className="flex flex-col"><span className="font-bold text-sm">👤 {user.nombre}</span><span className="text-[10px] text-gray-400 uppercase">{estadoJornada}</span></div>
         <div className="flex gap-2">
+          <button type="button" onClick={() => setShowModalClave(true)} className="bg-[#0055a5] px-3 py-1 rounded text-xs font-bold border border-white">🔑 Clave</button>
           {estadoJornada === 'TRABAJANDO' && <button type="button" onClick={() => logShift('INICIO_REF')} className="bg-orange-500 px-3 py-1 rounded text-xs font-bold border border-white">☕ PAUSA</button>}
           {estadoJornada === 'REFRIGERIO' && <button type="button" onClick={() => logShift('FIN_REF')} className="bg-green-500 px-3 py-1 rounded text-xs font-bold border border-white">▶ REANUDAR</button>}
-          {estadoJornada === 'TRABAJANDO' && <button type="button" onClick={() => logShift('FIN')} className="bg-[#003366] px-3 py-1 rounded text-xs font-bold border border-white text-yellow-400">FIN DÍA</button>}
+          {estadoJornada === 'TRABAJANDO' && <button type="button" onClick={() => logShift('FIN')} className="bg-[#003366] px-3 py-1 rounded text-xs font-bold text-yellow-400 border border-white">FIN DÍA</button>}
         </div>
       </nav>
 
@@ -665,6 +688,22 @@ export default function InspeccionPage() {
               <textarea className="w-full border p-2 rounded text-sm bg-gray-50" rows={2} placeholder="Escribir nuevo comentario..." value={nuevoComentario} onChange={(e) => setNewComentario(e.target.value)}></textarea>
               <button onClick={enviarComentario} className="w-full bg-green-600 text-white font-bold p-3 rounded-lg text-xs" disabled={loading}>AÑADIR COMENTARIO</button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL CAMBIO DE CLAVE */}
+      {showModalClave && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[120] backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="bg-[#003366] text-white p-4 flex justify-between items-center">
+              <h2 className="font-bold">Cambiar Contraseña</h2>
+              <button onClick={() => setShowModalClave(false)} className="text-2xl leading-none hover:text-red-400">&times;</button>
+            </div>
+            <form onSubmit={handleCambiarClave} className="p-6 space-y-4">
+              <div><label className="block text-xs font-bold text-[#003366] mb-1">Contraseña Actual</label><input type="password" value={claveActual} onChange={(e) => setClaveActual(e.target.value)} className="w-full border p-2 rounded bg-gray-50 text-sm" required /></div>
+              <div><label className="block text-xs font-bold text-[#003366] mb-1">Nueva Contraseña</label><input type="password" value={claveNueva} onChange={(e) => setClaveNueva(e.target.value)} className="w-full border p-2 rounded bg-gray-50 text-sm" required /></div>
+              <button type="submit" disabled={loading} className="w-full bg-green-600 text-white font-bold p-3 rounded-lg hover:bg-green-700 transition-colors">{loading ? 'GUARDANDO...' : 'GUARDAR CAMBIO'}</button>
+            </form>
           </div>
         </div>
       )}
