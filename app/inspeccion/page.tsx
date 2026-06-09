@@ -198,7 +198,7 @@ export default function InspeccionPage() {
       }
 
       // FUNCIÓN ENCAPSULADA PARA GUARDAR EL REGISTRO
-      const ejecutarGuardado = async (lat: number, lon: number) => {
+      const ejecutarGuardado = async (lat: number | null, lon: number | null) => {
          let timestampOficial = new Date().toISOString();
          if (isAdminManual) {
             const fechaManualObj = new Date(`${fecha}T${hora}:00`);
@@ -218,9 +218,11 @@ export default function InspeccionPage() {
       };
 
       if (isAdminManual) {
-         if (!manualPos) { alert("⚠️ Debe marcar un punto en el mapa interactivo."); setLoading(false); return; }
+         // Eliminamos la validación del manualPos
          if (!manualInspector) { alert("⚠️ Debe seleccionar a qué Inspector se le asignará el reporte."); setLoading(false); return; }
-         ejecutarGuardado(manualPos.lat, manualPos.lng);
+         
+         // Pasamos las coordenadas si existen, si no, pasamos null
+         ejecutarGuardado(manualPos ? manualPos.lat : null, manualPos ? manualPos.lng : null);
       } else {
          navigator.geolocation.getCurrentPosition(
            async (pos) => ejecutarGuardado(pos.coords.latitude, pos.coords.longitude),
@@ -427,7 +429,7 @@ export default function InspeccionPage() {
               {/* MAPA MANUAL PARA ADMINISTRADORES */}
               {isAdminManual && (
                 <div className="col-span-2 bg-yellow-50 p-4 rounded-xl border-2 border-yellow-400 mb-6 shadow-sm">
-                  <label className="text-xs font-black text-red-600 block mb-2 uppercase animate-pulse">📍 SELECCIONE EL PUNTO GPS EXACTO (Haga clic en el mapa)</label>
+                  <label className="text-xs font-black text-red-600 block mb-2 uppercase">📍 SELECCIONE EL PUNTO GPS EXACTO (Opcional - Haga clic en el mapa)</label>
                   <MapPicker position={manualPos} setPosition={setManualPos} />
                 </div>
               )}
