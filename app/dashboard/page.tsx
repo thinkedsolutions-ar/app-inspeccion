@@ -65,7 +65,7 @@ export default function DashboardPage() {
     const session = localStorage.getItem('buttini_user');
     if (!session) { window.location.href = '/'; return; }
     const userData = JSON.parse(session);
-    if (userData.rol !== 'Admin') { window.location.href = '/inspeccion'; return; }
+    if (userData.rol !== 'Admin' && userData.rol !== 'Usuario') { window.location.href = '/inspeccion'; return; }
     setAdminUser(userData);
     fetchData(); fetchUsers(); fetchCatalogosAdmin();
   },[]);
@@ -391,12 +391,17 @@ export default function DashboardPage() {
           <button onClick={() => setActiveTab('flota')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'flota' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>🚍 Panel de Seguimiento</button>
           <button onClick={() => setActiveTab('desempeno')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'desempeno' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>👥 Desempeño</button>
           <button onClick={() => setActiveTab('mapa')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'mapa' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>📍 Mapa Satelital</button>
-          <button onClick={() => setActiveTab('usuarios')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'usuarios' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>⚙️ Usuarios</button>
-          <button onClick={() => setActiveTab('config')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'config' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>🛠️ Configuración</button>
-          {adminUser?.puede_cargar_manual && (
-            <a href="/inspeccion?modo=manual" target="_blank" className="w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all text-white/60 hover:bg-white/5 hover:text-white mt-4 border border-dashed border-white/20">
-              ⚡ Carga Manual
-            </a>
+          
+          {adminUser?.rol === 'Admin' && (
+            <>
+              <button onClick={() => setActiveTab('usuarios')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'usuarios' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>⚙️ Usuarios</button>
+              <button onClick={() => setActiveTab('config')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'config' ? 'bg-[#1864f8] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>🛠️ Configuración</button>
+              {adminUser?.puede_cargar_manual && (
+                <a href="/inspeccion?modo=manual" target="_blank" className="w-full flex items-center gap-3 px-4 py-3 rounded-lg font-bold text-sm transition-all text-white/60 hover:bg-white/5 hover:text-white mt-4 border border-dashed border-white/20">
+                  ⚡ Carga Manual
+                </a>
+              )}
+            </>
           )}
         </nav>
         <div className="p-4"><button onClick={() => { localStorage.removeItem('buttini_user'); window.location.href = '/'; }} className="w-full bg-red-500/10 text-red-500 border border-red-500/20 p-3 rounded-lg font-bold hover:bg-red-500 hover:text-white transition-all text-sm flex justify-center items-center gap-2">↪ Cerrar Sesión</button></div>
@@ -725,7 +730,7 @@ export default function DashboardPage() {
                      <div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Usuario (Login)</label><input type="text" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required /></div>
                      <div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Clave</label><input type="password" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required /></div>
                      <div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombre Completo</label><input type="text" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={newUser.nombre} onChange={e => setNewUser({...newUser, nombre: e.target.value})} required /></div>
-                     <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Rol</label><select className="w-full border p-2 rounded-xl bg-white text-sm" value={newUser.rol} onChange={e => setNewUser({...newUser, rol: e.target.value})}><option value="Inspector">Inspector</option><option value="Admin">Admin</option></select></div>
+                     <div> <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Rol</label><select className="w-full border p-2 rounded-xl bg-white text-sm" value={newUser.rol} onChange={e => setNewUser({...newUser, rol: e.target.value})}><option value="Inspector">Inspector</option><option value="Usuario">Usuario (Solo lectura Panel)</option><option value="Admin">Admin</option></select></div>
                      <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Jornada Mínima</label><select className="w-full border p-2 rounded-xl bg-white text-sm" value={newUser.jornada} onChange={e => setNewUser({...newUser, jornada: e.target.value})}><option value="SI">Requerida (Sí)</option><option value="NO">Omitir (No)</option></select></div>
                      <button type="submit" className="bg-[#0B132B] text-white font-bold px-6 py-2 rounded-xl text-sm h-[38px] hover:bg-blue-900 transition-colors">GUARDAR</button>
                    </form>

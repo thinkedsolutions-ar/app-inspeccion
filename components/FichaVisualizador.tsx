@@ -104,7 +104,7 @@ const ReadOnlyEquipamiento = ({ data }: any) => {
           </>
         )}
         
-        <div className="font-bold self-center text-[#003366]">Pasajeros Transportados Sin SUBE</div><div className="bg-white p-1 border rounded font-bold">{data.sube_pasajeros_sin_sube || '-'}</div>
+        <div className="font-bold self-center text-[#003366]">  {data.sube_func === 'Incorrecto' ? 'Pasajeros Transportados Sin SUBE' : 'Pasajeros Inspeccionados SUBE'}</div><div className="bg-white p-1 border rounded font-bold">{data.sube_pasajeros_sin_sube || '-'}</div>
       </div>
     </div>
   );

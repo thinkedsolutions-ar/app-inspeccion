@@ -554,7 +554,9 @@ export default function InspeccionPage() {
                           </>
                         )}
                         
-                        <div className="font-bold self-center text-xs text-[#003366]">Pasajeros Transportados Sin SUBE</div>
+                        <div className="font-bold self-center text-xs text-[#003366]">
+                          {formData.sube_func === 'Incorrecto' ? 'Pasajeros Transportados Sin SUBE' : 'Pasajeros Inspeccionados SUBE'}
+                        </div>
                         <div><input type="number" className="w-full border p-1 rounded bg-white" value={formData.sube_pasajeros_sin_sube || ''} onChange={(e)=>handleChange('sube_pasajeros_sin_sube',e.target.value)} /></div>
                       </div>
                     </div>

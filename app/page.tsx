@@ -32,7 +32,7 @@ export default function LoginPage() {
     // Si el login es exitoso, guardamos la sesión y redirigimos
     localStorage.setItem('buttini_user', JSON.stringify(data));
     
-    if (data.rol === 'Admin') {
+    if (data.rol === 'Admin' || data.rol === 'Usuario') {
       window.location.href = '/dashboard';
     } else {
       window.location.href = '/inspeccion';
