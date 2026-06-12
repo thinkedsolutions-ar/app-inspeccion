@@ -40,6 +40,7 @@ export default function DashboardPage() {
   const [modalIns, setModalIns] = useState<any>(null);
   const [nuevoComentario, setNewComentario] = useState('');
   const [newUser, setNewUser] = useState({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' });
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [showModalClave, setShowModalClave] = useState(false);
   const [claveActual, setClaveActual] = useState('');
   const [claveNueva, setClaveNueva] = useState('');
@@ -91,9 +92,33 @@ export default function DashboardPage() {
     setCatConductores(resCond.data || []); setCatUnidades(resUni.data || []); setCatServicios(resServ.data || []);
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => { e.preventDefault(); await supabase.from('users').insert([newUser]); setNewUser({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' }); fetchUsers(); };
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingUserId) {
+      const { error } = await supabase.from('users').update({ username: newUser.username, password: newUser.password, nombre: newUser.nombre, rol: newUser.rol, jornada: newUser.jornada }).eq('id', editingUserId);
+      if (error) alert("Error: " + error.message); else { alert("Usuario actualizado"); setEditingUserId(null); setNewUser({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' }); fetchUsers(); }
+    } else {
+      const { error } = await supabase.from('users').insert([{ ...newUser, activo: true }]);
+      if (error) alert("Error: " + error.message); else { alert("Usuario creado"); setNewUser({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' }); fetchUsers(); }
+    }
+  };
+  const editUser = (u: any) => {
+    setEditingUserId(u.id);
+    setNewUser({ username: u.username, password: u.password, nombre: u.nombre, rol: u.rol, jornada: u.jornada });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const toggleUserStatus = async (id: string, current: boolean) => {
+    if (confirm(current ? "¿Inhabilitar usuario? Ya no podrá acceder al sistema." : "¿Reactivar este usuario?")) {
+      await supabase.from('users').update({ activo: !current }).eq('id', id);
+      fetchUsers();
+    }
+  };
   const handleDeleteUser = async (id: string, username: string) => { if (confirm(`¿Eliminar al usuario ${username}?`)) { await supabase.from('users').delete().eq('id', id); fetchUsers(); } };
-  const handleResetPassword = async (id: string, username: string) => { const newPass = prompt(`NUEVA CONTRASEÑA para ${username}:`); if (newPass) { await supabase.from('users').update({ password: newPass }).eq('id', id); } };
+  const handleResetPassword = async (id: string, username: string) => { 
+    const newPass = prompt(`NUEVA CONTRASEÑA para ${username}:`); 
+    if (newPass) { await supabase.from('users').update({ password: newPass }).eq('id', id); alert("Contraseña actualizada."); } 
+  };
   const handleToggleCargaManual = async (id: string, current: boolean) => { await supabase.from('users').update({ puede_cargar_manual: !current }).eq('id', id);  fetchUsers();  };
   const handleCambiarClavePropia = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true);
@@ -722,42 +747,41 @@ export default function DashboardPage() {
                 </div>
               )}
 
+              /* === USUARIOS === */}
               {activeTab === 'usuarios' && (
                  <div className="space-y-6 animate-in fade-in duration-500">
-                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                   <h3 className="text-[#0B132B] font-bold mb-4">Agregar Nuevo Usuario</h3>
+                 <div className={`p-6 rounded-2xl shadow-sm border ${editingUserId ? 'bg-yellow-50 border-yellow-400' : 'bg-white border-gray-100'}`}>
+                   <div className="flex justify-between items-center mb-4">
+                     <h3 className="font-bold text-[#0B132B]">{editingUserId ? '✏️ Editando Usuario' : '➕ Agregar Nuevo Usuario'}</h3>
+                     {editingUserId && <button onClick={() => { setEditingUserId(null); setNewUser({ username: '', password: '', nombre: '', rol: 'Inspector', jornada: 'SI' }); }} className="text-xs text-red-500 font-bold underline">Cancelar Edición</button>}
+                   </div>
                    <form onSubmit={handleCreateUser} className="flex flex-wrap gap-4 items-end">
-                     <div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Usuario (Login)</label><input type="text" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required /></div>
-                     <div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Clave</label><input type="password" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required /></div>
-                     <div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombre Completo</label><input type="text" className="w-full border p-2 rounded-xl bg-gray-50 text-sm" value={newUser.nombre} onChange={e => setNewUser({...newUser, nombre: e.target.value})} required /></div>
-                     <div> <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Rol</label><select className="w-full border p-2 rounded-xl bg-white text-sm" value={newUser.rol} onChange={e => setNewUser({...newUser, rol: e.target.value})}><option value="Inspector">Inspector</option><option value="Usuario">Usuario (Solo lectura Panel)</option><option value="Admin">Admin</option></select></div>
+                     <div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Usuario (Login)</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required /></div>
+                     <div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Clave</label><input type="password" className="w-full border p-2 rounded-xl bg-white text-sm" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required /></div>
+                     <div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombre Completo</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={newUser.nombre} onChange={e => setNewUser({...newUser, nombre: e.target.value})} required /></div>
+                     <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Rol</label><select className="w-full border p-2 rounded-xl bg-white text-sm" value={newUser.rol} onChange={e => setNewUser({...newUser, rol: e.target.value})}><option value="Inspector">Inspector</option><option value="Usuario">Usuario (Solo lectura Panel)</option><option value="Admin">Admin</option></select></div>
                      <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Jornada Mínima</label><select className="w-full border p-2 rounded-xl bg-white text-sm" value={newUser.jornada} onChange={e => setNewUser({...newUser, jornada: e.target.value})}><option value="SI">Requerida (Sí)</option><option value="NO">Omitir (No)</option></select></div>
-                     <button type="submit" className="bg-[#0B132B] text-white font-bold px-6 py-2 rounded-xl text-sm h-[38px] hover:bg-blue-900 transition-colors">GUARDAR</button>
+                     <button type="submit" className={`text-white font-bold px-6 py-2 rounded-xl text-sm h-[38px] transition-colors ${editingUserId ? 'bg-[#FFCC00] text-[#0B132B]' : 'bg-[#0B132B] hover:bg-blue-900'}`}>{editingUserId ? 'Actualizar' : 'Guardar'}</button>
                    </form>
                  </div>
                  
                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                    <table className="w-full text-sm text-left">
                      <thead className="bg-gray-50/50 text-gray-400 uppercase text-xs font-bold tracking-wider">
-                       <tr><th className="p-4 pl-6">Usuario</th><th className="p-4">Nombre</th><th className="p-4 text-center">Rol</th><th className="p-4 text-center">Jornada</th><th className="p-4 text-center text-red-600">Admin Carga</th><th className="p-4 text-right pr-6">Acciones</th></tr>
+                       <tr><th className="p-4 pl-6">Usuario</th><th className="p-4">Nombre</th><th className="p-4 text-center">Rol</th><th className="p-4 text-center">Jornada</th><th className="p-4 text-center">Estado</th><th className="p-4 text-right pr-6">Acciones</th></tr>
                      </thead>
                      <tbody>
                        {usuarios.map(u => (
-                         <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
+                         <tr key={u.id} className={`border-b hover:bg-gray-50 transition-colors ${u.activo === false ? 'opacity-50 grayscale' : ''}`}>
                            <td className="p-4 pl-6 font-bold text-[#0B132B]">{u.username}</td>
                            <td className="p-4 font-medium text-gray-600">{u.nombre}</td>
-                           <td className="p-4 text-center"><span className={`px-3 py-1 rounded-lg text-[10px] font-bold text-white ${u.rol === 'Admin' ? 'bg-[#0B132B]' : 'bg-gray-500'}`}>{u.rol}</span></td>
+                           <td className="p-4 text-center"><span className={`px-3 py-1 rounded-lg text-[10px] font-bold text-white ${u.rol === 'Admin' ? 'bg-[#0B132B]' : (u.rol === 'Usuario' ? 'bg-blue-500' : 'bg-gray-500')}`}>{u.rol}</span></td>
                            <td className="p-4 text-center"><span className={`px-3 py-1 rounded-lg text-[10px] font-bold text-white ${u.jornada === 'SI' ? 'bg-green-500' : 'bg-red-500'}`}>{u.jornada === 'SI' ? 'Requerida' : 'Omitida'}</span></td>
-                           <td className="p-4 pr-6 text-right flex gap-2 justify-end">
-                             <button onClick={() => handleResetPassword(u.id, u.username)} className="text-blue-600 font-bold hover:bg-blue-100 transition-colors text-xs bg-blue-50 px-3 py-1.5 rounded-lg">🔑 Reset Clave</button>
-                             <button onClick={() => handleDeleteUser(u.id, u.username)} className="text-red-600 font-bold hover:bg-red-100 transition-colors text-xs bg-red-50 px-3 py-1.5 rounded-lg">❌ Eliminar</button>
-                           <td className="p-4 text-center">
-                              {u.rol === 'Admin' ? (
-                                <label className="flex items-center justify-center cursor-pointer">
-                                  <input type="checkbox" checked={u.puede_cargar_manual || false} onChange={() => handleToggleCargaManual(u.id, u.puede_cargar_manual)} className="w-4 h-4 accent-red-600" />
-                                </label>
-                              ) : <span className="text-gray-300">-</span>}
-                            </td>  
+                           <td className="p-4 text-center">{u.activo !== false ? <span className="bg-green-100 text-green-700 font-bold px-2 py-1 rounded text-[10px]">ACTIVO</span> : <span className="bg-red-100 text-red-700 font-bold px-2 py-1 rounded text-[10px]">INACTIVO</span>}</td>
+                           <td className="p-4 pr-6 text-right flex gap-2 justify-end flex-wrap">
+                             <button onClick={() => editUser(u)} className="text-blue-600 font-bold text-xs bg-blue-50 px-2 py-1.5 rounded-lg hover:bg-blue-100">Editar</button>
+                             <button onClick={() => handleResetPassword(u.id, u.username)} className="text-gray-600 font-bold text-xs bg-gray-100 px-2 py-1.5 rounded-lg hover:bg-gray-200">🔑 Clave</button>
+                             <button onClick={() => toggleUserStatus(u.id, u.activo !== false)} className={`font-bold text-xs px-2 py-1.5 rounded-lg ${u.activo !== false ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>{u.activo !== false ? 'Inhabilitar' : 'Reactivar'}</button>
                            </td>
                          </tr>
                        ))}

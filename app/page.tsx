@@ -15,12 +15,11 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
-    // Consultamos en nuestra tabla 'users' de Supabase.......
     const { data, error: dbError } = await supabase
       .from('users')
       .select('*')
       .eq('username', username.trim())
-      .eq('password', password.trim()) // En prod usaríamos auth.signInWithPassword
+      .eq('password', password.trim())
       .single();
 
     if (dbError || !data) {
@@ -28,6 +27,22 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
+
+    // NUEVO: Verificamos si el usuario fue inhabilitado por el administrador
+    if (data.activo === false) {
+      setError('Este usuario ha sido inhabilitado. Contacte al administrador.');
+      setLoading(false);
+      return;
+    }
+
+    localStorage.setItem('buttini_user', JSON.stringify(data));
+    
+    if (data.rol === 'Admin' || data.rol === 'Usuario') {
+      window.location.href = '/dashboard';
+    } else {
+      window.location.href = '/inspeccion';
+    }
+  };
 
     // Si el login es exitoso, guardamos la sesión y redirigimos
     localStorage.setItem('buttini_user', JSON.stringify(data));
