@@ -747,7 +747,7 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              /* === USUARIOS === */}
+              {/* === USUARIOS === */}
               {activeTab === 'usuarios' && (
                  <div className="space-y-6 animate-in fade-in duration-500">
                  <div className={`p-6 rounded-2xl shadow-sm border ${editingUserId ? 'bg-yellow-50 border-yellow-400' : 'bg-white border-gray-100'}`}>
