@@ -6,7 +6,7 @@ const isFalta = (key: string, val: string) => {
   const v = String(val).toUpperCase();
   const rules123 = ['eval_horarios', 'eval_uniforme', 'eval_atencion', 'cond_ascenso_descenso', 'cond_marcha', 'cond_adelanto'];
   const rulesSI = ['cond_exceso_velocidad', 'normas_transito_frenadas', 'normas_transito_maniobras', 'normas_transito_linea'];
-  const rulesNO = ['normas_transito_cinturon', 'normas_transito_semaforos', 'normas_transito_luces', 'normas_transito_bocina', 'normas_transito_paso'];
+  const rulesNO = ['normas_transito_cinturon', 'normas_transito_semaforos', 'normas_transito_luces', 'normas_transito_paso'];
 
   if (rules123.includes(key) && ['1','2','3'].includes(v)) return true;
   if (rulesSI.includes(key) && v === 'SI') return true;

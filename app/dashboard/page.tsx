@@ -171,7 +171,6 @@ export default function DashboardPage() {
     if (form.normas_transito_cinturon === 'NO') fallas.push('No utiliza cinturón de seguridad');
     if (form.normas_transito_semaforos === 'NO') fallas.push('No respeta semáforos');
     if (form.normas_transito_luces === 'NO') fallas.push('Uso de luces incorrecto');
-    if (form.normas_transito_bocina === 'NO') fallas.push('Mal uso de bocina');
     if (form.normas_transito_paso === 'NO') fallas.push('No cede el paso');
     return fallas;
   };
