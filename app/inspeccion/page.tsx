@@ -446,6 +446,15 @@ export default function InspeccionPage() {
                     setSubtipoPersonal('');
                     return;
                   }
+                  
+                  // NUEVO: REDIRECCIÓN DIRECTA PARA NOVEDADES EN RUTA
+                  if (val === '7-NOVEDADES EN RUTA') {
+                    window.open('https://seguridad-vial-buttini.vercel.app/?mode=driver', '_blank');
+                    setTipoInspeccion('');
+                    setSubtipoPersonal('');
+                    return;
+                  }
+
                   setTipoInspeccion(val); setSubtipoPersonal('');
                 }} required>
                   <option value="">-- Seleccione una opción --</option>
@@ -455,6 +464,8 @@ export default function InspeccionPage() {
                   <option value="4-SEGUIMIENTO DE TEMAS">4 - SEGUIMIENTO DE TEMAS</option>
                   <option value="5-INSPECCION AREA DE DESCANSO">5 - INSPECCION AREA DE DESCANSO</option>
                   <option value="6-SINIESTRO CARGA" className="font-bold text-red-600 bg-red-50">6 - SINIESTRO CARGA ↗</option>
+                  {/* NUEVA OPCIÓN AÑADIDA AQUÍ ABAJO */}
+                  <option value="7-NOVEDADES EN RUTA" className="font-bold text-orange-600 bg-orange-50">7 - NOVEDADES EN RUTA ↗</option>
                 </select>
               </div>
 
