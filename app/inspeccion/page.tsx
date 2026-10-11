@@ -6,12 +6,27 @@ import FichaVisualizador from '@/components/FichaVisualizador';
 import dynamic from 'next/dynamic';
 const MapPicker = dynamic(() => import('./MapPicker'), { ssr: false });
 
+// Función de Haversine: Calcula la distancia exacta en metros entre dos coordenadas considerando la curvatura de la Tierra.
+const calcularDistancia = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371e3; // Radio de la Tierra en metros
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLon = (lon2 - lon1) * rad;
+  
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * rad) * Math.cos(lat2 * rad) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  
+  return R * c; // Retorna la distancia en metros
+};
+
 export default function InspeccionPage() {
   const [user, setUser] = useState<any>(null);
   const [estadoJornada, setEstadoJornada] = useState<'INACTIVA' | 'TRABAJANDO' | 'REFRIGERIO'>('INACTIVA');
   const [loading, setLoading] = useState(false);
   const [locationEnabled, setLocationEnabled] = useState<boolean | null>(null);
-  
+  const [geocercas, setGeocercas] = useState<any[]>([]);
   const [esTurismo, setEsTurismo] = useState(false); // <-- NUEVO ESTADO
   const [fecha, setFecha] = useState('');
   const [hora, setHora] = useState('');
@@ -75,10 +90,11 @@ export default function InspeccionPage() {
   };
 
   const fetchCatalogos = async () => {
-    const [resCond, resUni, resServ] = await Promise.all([
+    const [resCond, resUni, resServ, resGeo] = await Promise.all([
       supabase.from('conductores').select('*').eq('activo', true),
       supabase.from('unidades').select('*').eq('activo', true).order('numero'),
-      supabase.from('servicios').select('*').eq('activo', true).order('nombre')
+      supabase.from('servicios').select('*').eq('activo', true).order('nombre'),
+      supabase.from('geocercas').select('*').eq('activo', true) // <-- NUEVO
     ]);
     
     const condFormatted = (resCond.data || []).map(c => ({
@@ -86,6 +102,7 @@ export default function InspeccionPage() {
     })).sort((a, b) => a.fullName.localeCompare(b.fullName));
 
     setListas({ conductores: condFormatted, unidades: resUni.data || [], servicios: resServ.data || [] });
+    setGeocercas(resGeo.data || []); // <-- GUARDAMOS LAS ZONAS
   };
 
   const fetchPendientes = async (inspectorNombre: string) => {
@@ -153,6 +170,22 @@ export default function InspeccionPage() {
   const logShift = async (accion: string) => {
     setLoading(true);
     navigator.geolocation.getCurrentPosition(async (pos) => {
+      
+      // --- ESCUDO GEOFENCING (Solo verificamos al INICIAR jornada) ---
+      if (accion === 'INICIO') {
+        for (const zona of geocercas) {
+          const distancia = calcularDistancia(pos.coords.latitude, pos.coords.longitude, zona.lat, zona.lon);
+          
+          // Si la distancia al punto prohibido es MENOR al radio establecido, bloqueamos.
+          if (distancia <= zona.radio) {
+            alert(`🚫 ACCESO DENEGADO: Estás en una zona restringida (${zona.nombre}). Aléjate al menos ${zona.radio} metros para iniciar tu jornada.`);
+            setLoading(false);
+            return; // ⛔ Cortamos la ejecución aquí, no se guarda el inicio de jornada
+          }
+        }
+      }
+      // -----------------------------------------------------------------
+
       await supabase.from('shifts').insert([{
         username: user.username, nombre: user.nombre, accion: accion,
         lat: pos.coords.latitude, lon: pos.coords.longitude
@@ -160,7 +193,10 @@ export default function InspeccionPage() {
       if (accion === 'FIN') { localStorage.removeItem('buttini_user'); window.location.href = '/'; }
       else checkJornada(user.username);
       setLoading(false);
-    });
+    }, () => {
+      alert("Error obteniendo GPS. Asegúrese de tener la ubicación activada.");
+      setLoading(false);
+    }, { enableHighAccuracy: true }); // Pedimos alta precisión al GPS
   };
 
   const handleChange = (campo: string, valor: string) => {
