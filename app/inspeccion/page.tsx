@@ -173,14 +173,8 @@ export default function InspeccionPage() {
       
       // --- ESCUDO GEOFENCING (Solo verificamos al INICIAR jornada) ---
       if (accion === 'INICIO') {
-        // 🚨 DEBUG 1: Ver si descargó las geocercas de Supabase
-        alert(`Buscando en la BD... Encontré ${geocercas.length} zonas prohibidas.`);
-
         for (const zona of geocercas) {
           const distancia = calcularDistancia(pos.coords.latitude, pos.coords.longitude, zona.lat, zona.lon);
-          
-          // 🚨 DEBUG 2: Ver tu GPS real y a qué distancia matemática estás de la zona
-          alert(`📍 Tu GPS dice: Lat: ${pos.coords.latitude}, Lon: ${pos.coords.longitude} \n📏 Distancia calculada a ${zona.nombre}: ${Math.round(distancia)} metros.`);
           
           if (distancia <= zona.radio) {
             alert(`🚫 ACCESO DENEGADO: Estás en una zona restringida (${zona.nombre}). Aléjate al menos ${zona.radio} metros para iniciar tu jornada.`);
@@ -203,6 +197,7 @@ export default function InspeccionPage() {
       setLoading(false);
     }, { enableHighAccuracy: true });
   };
+
 
   const handleChange = (campo: string, valor: string) => {
     setFormData((prev: any) => ({ ...prev, [campo]: valor }));
