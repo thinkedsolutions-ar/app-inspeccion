@@ -55,6 +55,8 @@ export default function DashboardPage() {
 
   // Estados ABM modificados para incluir nuevos campos
   const [abmTab, setAbmTab] = useState('conductores');
+  const [catGeocercas, setCatGeocercas] = useState<any[]>([]);
+  const [formGeo, setFormGeo] = useState({ nombre: '', lat: '', lon: '', radio: '100' });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formCond, setFormCond] = useState({ legajo: '', nombres: '', apellido: '', telefono: '', empresa: 'Antonio Buttini', foto: '' });
   const [formUni, setFormUni] = useState({ numero: '', empresa: 'Antonio Buttini' });
@@ -84,12 +86,16 @@ export default function DashboardPage() {
 
   const fetchUsers = async () => { const { data } = await supabase.from('users').select('*').order('nombre'); if (data) setUsuarios(data); };
   const fetchCatalogosAdmin = async () => {
-    const [resCond, resUni, resServ] = await Promise.all([
+    const [resCond, resUni, resServ, resGeo] = await Promise.all([
       supabase.from('conductores').select('*').order('nombre'),
       supabase.from('unidades').select('*').order('numero'),
-      supabase.from('servicios').select('*').order('nombre')
+      supabase.from('servicios').select('*').order('nombre'),
+      supabase.from('geocercas').select('*').order('nombre') // <-- NUEVO
     ]);
-    setCatConductores(resCond.data || []); setCatUnidades(resUni.data || []); setCatServicios(resServ.data || []);
+    setCatConductores(resCond.data || []); 
+    setCatUnidades(resUni.data || []); 
+    setCatServicios(resServ.data || []);
+    setCatGeocercas(resGeo.data || []); // <-- NUEVO
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -199,6 +205,7 @@ export default function DashboardPage() {
     if (type === 'conductores') setFormCond({ legajo: item.legajo || '', nombres: item.nombres || '', apellido: item.apellido || '', telefono: item.telefono || '', empresa: item.empresa || 'Antonio Buttini', foto: item.foto || '' });
     if (type === 'unidades') setFormUni({ numero: item.numero || '', empresa: item.empresa || 'Antonio Buttini' });
     if (type === 'servicios') setFormServ({ grupo: item.grupo || '', linea: item.linea || '', nombre: item.nombre || '', temporada: item.temporada || '', empresa: item.empresa || 'Antonio Buttini' });
+    if (type === 'geocercas') setFormGeo({ nombre: item.nombre || '', lat: item.lat || '', lon: item.lon || '', radio: item.radio || '100' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -219,6 +226,17 @@ export default function DashboardPage() {
       if (editingId) await supabase.from('servicios').update(payloadServ).eq('id', editingId);
       else await supabase.from('servicios').insert([{ ...payloadServ, activo: true }]);
     }
+    if(type === 'geocercas') {
+      const payloadGeo = { nombre: formGeo.nombre, lat: parseFloat(formGeo.lat), lon: parseFloat(formGeo.lon), radio: parseInt(formGeo.radio) };
+      if (editingId) await supabase.from('geocercas').update(payloadGeo).eq('id', editingId);
+      else await supabase.from('geocercas').insert([{ ...payloadGeo, activo: true }]);
+    }
+    setEditingId(null); 
+    setFormCond({ legajo: '', nombres: '', apellido: '', telefono: '', empresa: 'Antonio Buttini', foto: '' }); 
+    setFormUni({ numero: '', empresa: 'Antonio Buttini' }); 
+    setFormServ({ grupo: '', linea: '', nombre: '', temporada: '', empresa: 'Antonio Buttini' });
+    setFormGeo({ nombre: '', lat: '', lon: '', radio: '100' }); // <-- NUEVO
+    alert(editingId ? "Actualizado correctamente" : "Guardado correctamente"); fetchCatalogosAdmin();
     setEditingId(null); 
     setFormCond({ legajo: '', nombres: '', apellido: '', telefono: '', empresa: 'Antonio Buttini', foto: '' }); 
     setFormUni({ numero: '', empresa: 'Antonio Buttini' }); 
@@ -512,6 +530,7 @@ export default function DashboardPage() {
                     <button onClick={() => {setAbmTab('conductores'); setEditingId(null);}} className={`pb-3 font-bold text-sm px-2 ${abmTab==='conductores' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-[#0B132B]'}`}>👨‍✈️ Conductores</button>
                     <button onClick={() => {setAbmTab('unidades'); setEditingId(null);}} className={`pb-3 font-bold text-sm px-2 ${abmTab==='unidades' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-[#0B132B]'}`}>🚌 Unidades</button>
                     <button onClick={() => {setAbmTab('servicios'); setEditingId(null);}} className={`pb-3 font-bold text-sm px-2 ${abmTab==='servicios' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-[#0B132B]'}`}>🗺️ Servicios</button>
+                    <button onClick={() => {setAbmTab('geocercas'); setEditingId(null);}} className={`pb-3 font-bold text-sm px-2 ${abmTab==='geocercas' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-[#0B132B]'}`}>📍 Geocercas</button>
                   </div>
 
                   {abmTab === 'servicios' && catServicios.length > 0 && (
@@ -552,13 +571,23 @@ export default function DashboardPage() {
                           <div className="flex-1 min-w-[150px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Temporada</label><input type="text" placeholder="Ej: Verano" className="w-full border p-2 rounded-xl bg-white text-sm" value={formServ.temporada} onChange={e=>setFormServ({...formServ, temporada: e.target.value})} /></div>
                         </>
                       )}
+                      {abmTab === 'geocercas' && (
+                        <>
+                          <div className="flex-1 min-w-[200px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombre (Ej: Casa Juan)</label><input type="text" className="w-full border p-2 rounded-xl bg-white text-sm" value={formGeo.nombre} onChange={e=>setFormGeo({...formGeo, nombre: e.target.value})} required/></div>
+                          <div className="w-[120px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Latitud</label><input type="number" step="any" placeholder="-34.617" className="w-full border p-2 rounded-xl bg-white text-sm" value={formGeo.lat} onChange={e=>setFormGeo({...formGeo, lat: e.target.value})} required/></div>
+                          <div className="w-[120px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Longitud</label><input type="number" step="any" placeholder="-68.333" className="w-full border p-2 rounded-xl bg-white text-sm" value={formGeo.lon} onChange={e=>setFormGeo({...formGeo, lon: e.target.value})} required/></div>
+                          <div className="w-[100px]"><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Radio (Metros)</label><input type="number" className="w-full border p-2 rounded-xl bg-white text-sm" value={formGeo.radio} onChange={e=>setFormGeo({...formGeo, radio: e.target.value})} required/></div>
+                        </>
+                      )}
                       
-                      <div className="flex-1 min-w-[150px]">
-                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Empresa</label>
-                        <select className="w-full border p-2 rounded-xl bg-white text-sm" value={abmTab === 'conductores' ? formCond.empresa : (abmTab === 'unidades' ? formUni.empresa : formServ.empresa)} onChange={(e) => { const val = e.target.value; if(abmTab === 'conductores') setFormCond({...formCond, empresa: val}); if(abmTab === 'unidades') setFormUni({...formUni, empresa: val}); if(abmTab === 'servicios') setFormServ({...formServ, empresa: val}); }}>
-                          <option value="Antonio Buttini">Antonio Buttini</option><option value="Turismo Buttini">Turismo Buttini</option>
-                        </select>
-                      </div>
+                      {abmTab !== 'geocercas' && (
+                        <div className="flex-1 min-w-[150px]">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Empresa</label>
+                          <select className="w-full border p-2 rounded-xl bg-white text-sm" value={abmTab === 'conductores' ? formCond.empresa : (abmTab === 'unidades' ? formUni.empresa : formServ.empresa)} onChange={(e) => { const val = e.target.value; if(abmTab === 'conductores') setFormCond({...formCond, empresa: val}); if(abmTab === 'unidades') setFormUni({...formUni, empresa: val}); if(abmTab === 'servicios') setFormServ({...formServ, empresa: val}); }}>
+                            <option value="Antonio Buttini">Antonio Buttini</option><option value="Turismo Buttini">Turismo Buttini</option>
+                          </select>
+                        </div>
+                      )}
 
                       <button type="submit" className={`text-white font-bold px-6 py-2 rounded-xl text-sm h-[38px] transition-colors ${editingId ? 'bg-[#FFCC00] text-[#0B132B]' : 'bg-[#0B132B] hover:bg-blue-900'}`}>{editingId ? 'Actualizar' : 'Guardar'}</button>
                     </form>
@@ -570,18 +599,20 @@ export default function DashboardPage() {
                         <tr>
                           {abmTab === 'conductores' ? <><th className="p-4 w-12 text-center">Foto</th><th className="p-4">Legajo / Nombre</th><th className="p-4 text-center">Empresa</th><th className="p-4 text-center">Teléfono</th></> : 
                           (abmTab === 'servicios' ? <><th className="p-4 text-center">Grupo</th><th className="p-4 text-center">Linea</th><th className="p-4">Servicio</th><th className="p-4 text-center">Empresa</th><th className="p-4 text-center">Temporada</th></> : 
-                          <><th className="p-4">Unidad</th><th className="p-4 text-center">Empresa</th></>)}
+                          (abmTab === 'geocercas' ? <><th className="p-4">Nombre de Zona</th><th className="p-4 text-center">Coordenadas</th><th className="p-4 text-center">Radio</th></> :
+                          <><th className="p-4">Unidad</th><th className="p-4 text-center">Empresa</th></>))}
                           <th className="p-4 text-center w-32">Estado</th><th className="p-4 text-right">Acción</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {(abmTab === 'conductores' ? catConductores : (abmTab === 'unidades' ? catUnidades : catServicios)).map(item => (
+                        {(abmTab === 'conductores' ? catConductores : (abmTab === 'unidades' ? catUnidades : (abmTab === 'geocercas' ? catGeocercas : catServicios))).map(item => (
                            <tr key={item.id} className={`border-b border-gray-50 hover:bg-gray-50/80 transition-colors ${!item.activo ? 'opacity-50 grayscale' : ''}`}>
                              {abmTab === 'conductores' ? (
                                <><td className="p-4 text-center"><img src={item.foto || 'https://i.ibb.co/68v1rJv/user.png'} className="w-8 h-8 rounded-full object-cover border bg-gray-100 mx-auto" /></td><td className="p-4"><div className="font-bold text-[#0B132B]">{item.legajo} - {item.apellido}, {item.nombres}</div></td><td className="p-4 text-center text-xs text-gray-500 font-bold">{item.empresa || '-'}</td><td className="p-4 text-center text-gray-600">{item.telefono || '-'}</td></>
                              ) : (
                                abmTab === 'servicios' ? <><td className="p-4 text-center font-bold text-gray-500">{item.grupo || '-'}</td><td className="p-4 text-center font-bold text-gray-500">{item.linea || '-'}</td><td className="p-4 font-bold text-[#0B132B]">{item.nombre}</td><td className="p-4 text-center text-xs text-gray-500 font-bold">{item.empresa || '-'}</td><td className="p-4 text-center text-gray-600 font-bold">{item.temporada || '-'}</td></> : 
-                               <><td className="p-4 font-bold text-[#0B132B]">{item.numero}</td><td className="p-4 text-center text-xs text-gray-500 font-bold">{item.empresa || '-'}</td></>
+                               (abmTab === 'geocercas' ? <><td className="p-4 font-bold text-[#0B132B]">{item.nombre}</td><td className="p-4 text-center text-xs text-gray-500 font-mono">{item.lat}, {item.lon}</td><td className="p-4 text-center text-[#0B132B] font-bold">{item.radio} m</td></> :
+                               <><td className="p-4 font-bold text-[#0B132B]">{item.numero}</td><td className="p-4 text-center text-xs text-gray-500 font-bold">{item.empresa || '-'}</td></>)
                              )}
                              <td className="p-4 text-center">{item.activo ? <span className="bg-green-100 text-green-700 font-bold px-2 py-1 rounded text-[10px]">ACTIVO</span> : <span className="bg-red-100 text-red-700 font-bold px-2 py-1 rounded text-[10px]">INHABILITADO</span>}</td>
                              <td className="p-4 text-right flex gap-2 justify-end">
